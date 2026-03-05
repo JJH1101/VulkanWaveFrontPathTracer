@@ -14,16 +14,25 @@ android {
         }
         externalNativeBuild {
             cmake {
-                cppFlags "-std=c++14"
-                arguments "-DANDROID_STL=c++_shared", '-DANDROID_TOOLCHAIN=clang', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                cppFlags "-std=c++2a"
+                arguments "-DANDROID_STL=c++_shared", '-DANDROID_TOOLCHAIN=clang'
             }
         }
     }
     sourceSets {
         main.assets.srcDirs = ['assets']
     }
+    signingConfigs {
+        release {
+            keyAlias "key0"
+            keyPassword "241004"
+            storeFile file("C:\\AndroidKeys\\releaseKey.jks")
+            storePassword "241004"
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
