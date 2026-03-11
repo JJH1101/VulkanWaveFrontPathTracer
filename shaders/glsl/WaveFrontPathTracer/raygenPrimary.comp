@@ -1,0 +1,87 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_scalar_block_layout : require
+
+#define THREADBLOCK_SIZE 256
+
+#include "ray.glsl"
+
+float halton(int i, int base) {
+    float r = 0.0;
+    float f = 1.0 / float(base);
+    int j = i;
+    
+    while (j > 0) {
+        r += f * float(j % base);
+        j /= base; 
+        f /= float(base);
+    }
+    return r;
+}
+
+vec2 halton2D(int i) {
+    return vec2(halton(i, 2), halton(i, 3));
+}
+
+layout(buffer_reference, std430) readonly buffer IndexToPixel { int data[]; };
+
+layout(buffer_reference, std430) writeonly buffer RayBuffer { Ray data[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint64_t indexToPixelAddr;
+    uint64_t rayBufferAddr;
+    mat4     screenToWorld;
+    vec3     origin;
+    int      sampleIndex;
+    ivec2    size;
+    float    maxDist;
+} pc;
+
+// Generate Primary Rays
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+
+    // Task index.
+    const uint taskIndex = gl_GlobalInvocationID.x;
+    
+    // Batch size.
+    const uint numberOfPixels = pc.size.x * pc.size.y;
+
+    // Buffer references.
+    IndexToPixel indexToPixel = IndexToPixel(pc.indexToPixelAddr);
+    RayBuffer rays = RayBuffer(pc.rayBufferAddr);
+
+    // Only valid threads.
+    if (taskIndex < numberOfPixels) {
+        
+        // Pixel.
+        int pixel = indexToPixel.data[taskIndex];
+
+        // Sample rays using Halton sequence.
+        ivec2 samplePos = ivec2(pixel % pc.size.x, pixel / pc.size.x);
+        vec2 haltonSample = halton2D(pc.sampleIndex);
+        float x = float(samplePos.x) + haltonSample.x;
+        float y = float(samplePos.y) + haltonSample.y;
+
+        // Compute ray.
+        vec4 nscreenPos;
+        nscreenPos.x = 2.0f * x / float(pc.size.x) - 1.0f;
+        nscreenPos.y = 2.0f * y / float(pc.size.y) - 1.0f;
+        nscreenPos.z = 0.0f;
+        nscreenPos.w = 1.0f;
+        vec4 worldPos4D = pc.screenToWorld * nscreenPos;
+        vec3 worldPos = vec3(worldPos4D) / worldPos4D.w;
+
+        // Write result.
+        Ray ray;
+        ray.origin = pc.origin;
+        ray.direction = normalize(worldPos - pc.origin);
+        ray.tmin = 0.0f;
+        ray.tmax = pc.maxDist;
+        rays.data[taskIndex] = ray;
+
+    }
+
+}

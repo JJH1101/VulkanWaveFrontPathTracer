@@ -1,0 +1,101 @@
+#version 460
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_scalar_block_layout : require
+
+#define THREADBLOCK_SIZE 256
+
+// Reinhard's tone mapping.
+// https://www.cs.utah.edu/~reinhard/cdrom/tonemap.pdf
+// https://www.yamedev.net/topic/407348-reinhards-tone-mapping-operator/
+vec3 toneMappingReinhard(vec3 color, float keyValue, float whitePoint) {
+
+    // Avg. luminance.
+    float avgLuminance = 0.5f;
+
+    // RGB -> XYZ conversion
+    // Column-major order
+    const mat3 RGB2XYZ = mat3(0.5141364, 0.3238786,  0.16036376,
+    						  0.265068,  0.67023428, 0.06409157,
+    						  0.0241188, 0.1228178,  0.84442666); 
+    // Row-major order
+//    const mat3 RGB2XYZ = mat3(
+//        0.5141364f, 0.265068f, 0.0241188f,
+//        0.3238786f, 0.67023428f, 0.1228178f,
+//        0.16036376f, 0.06409157f, 0.84442666f
+//    );
+    vec3 XYZ = RGB2XYZ * color;
+
+    // XYZ -> Yxy conversion
+    vec3 Yxy;
+    Yxy.x = XYZ.y; // copy luminance Y
+    Yxy.y = XYZ.x / (XYZ.x + XYZ.y + XYZ.z); // x = X / (X + Y + Z)
+    Yxy.z = XYZ.y / (XYZ.x + XYZ.y + XYZ.z); // y = Y / (X + Y + Z)
+
+    // (Lp) Map average luminance to the middlegrey zone by scaling pixel luminance
+    float Lp = Yxy.x * keyValue / avgLuminance;
+    // (Ld) Scale all luminance within a displayable range of 0 to 1
+    Yxy.x = (Lp * (1.0f + Lp / (whitePoint * whitePoint))) / (1.0f + Lp);
+
+    // Yxy -> XYZ conversion
+    XYZ.x = Yxy.x * Yxy.y / Yxy.z;               // X = Y * x / y
+    XYZ.y = Yxy.x;                                // copy luminance Y
+    XYZ.z = Yxy.x * (1 - Yxy.y - Yxy.z) / Yxy.z;  // Z = Y * (1-x-y) / y
+
+    // XYZ -> RGB conversion
+    // Column-major order
+    const mat3 XYZ2RGB  = mat3(2.5651,-1.1665,-0.3986,
+    						    -1.0217, 1.9777, 0.0439, 
+    						     0.0753, -0.2543, 1.1892);
+    // Row-major order
+//    const mat3 XYZ2RGB = mat3(
+//        2.5651f, -1.0217f, 0.0753f,
+//        -1.1665f, 1.9777f, -0.2543f,
+//        -0.3986f, 0.0439f, 1.1892f
+//    );
+    color = XYZ2RGB * XYZ;
+    return color;
+}
+
+layout(buffer_reference, std430) buffer PixelBuffer { vec4 data[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint64_t framePixelAddr;
+    uint64_t pixelAddr;
+    int numberOfPixels;
+    int frameIndex;
+    float keyValue;
+    float whitePoint;
+} pc;
+
+// Post processing
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+    const uint taskIndex = gl_GlobalInvocationID.x;
+
+    PixelBuffer framePixels = PixelBuffer(pc.framePixelAddr);
+    PixelBuffer pixels = PixelBuffer(pc.pixelAddr);
+
+    if (taskIndex < pc.numberOfPixels) {
+
+       // Interpolate color according to the frame index.
+       if (pc.frameIndex > 1) {
+            vec3 color0 = vec3(pixels.data[taskIndex]);
+            vec3 color1 = vec3(framePixels.data[taskIndex]);
+            float a = 1.0f / float(pc.frameIndex);
+            float b = a * (float(pc.frameIndex) - 1.0f);
+            vec3 color = a * color1 + b * color0;
+            pixels.data[taskIndex] = vec4(color, 1.0f);
+            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
+        }
+
+        // First frame => Just assign the color.
+        else {
+            vec4 color = framePixels.data[taskIndex];
+            pixels.data[taskIndex] = color;
+            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
+        }
+
+    }
+
+}

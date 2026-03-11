@@ -7,12 +7,12 @@ function(buildProject PROJECT_NAME)
 	SET(PROJECT_FOLDER ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME})
 	message(STATUS "Generating project file for single project in ${PROJECT_FOLDER}")
 	# Main
-	file(GLOB SOURCE *.cpp ${BASE_HEADERS} ${PROJECT_FOLDER}/*.cpp)
+	file(GLOB_RECURSE SOURCE "${PROJECT_FOLDER}/*.cpp")
 	SET(MAIN_CPP ${PROJECT_FOLDER}/${PROJECT_NAME}.cpp)	
 	if(EXISTS ${PROJECT_FOLDER}/main.cpp)
 		SET(MAIN_CPP ${PROJECT_FOLDER}/main.cpp)
 	ENDIF()
-	file(GLOB HEADER ${PROJECT_FOLDER}/*.hpp ${PROJECT_FOLDER}/*.h)
+	file(GLOB_RECURSE HEADER ${PROJECT_FOLDER}/*.hpp ${PROJECT_FOLDER}/*.h)
 	if(EXISTS ${PROJECT_FOLDER}/${PROJECT_NAME}.h)
 		SET(MAIN_HEADER ${PROJECT_FOLDER}/${PROJECT_NAME}.h)
 	ENDIF()
@@ -87,6 +87,7 @@ endfunction(buildProjects)
 
 set(PROJECTS
 	rayquery
+	WaveFrontPathTracer
 )
 
 buildProjects()

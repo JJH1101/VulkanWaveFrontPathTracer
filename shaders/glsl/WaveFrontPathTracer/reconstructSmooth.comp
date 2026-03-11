@@ -1,0 +1,99 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_scalar_block_layout : require
+
+#define THREADBLOCK_SIZE 256
+
+#include "ray.glsl"
+#include "geometrytypes.glsl"
+
+layout(buffer_reference, std430) readonly buffer RayBuffer { Ray data[]; };
+layout(buffer_reference, std430) readonly buffer RayResultBuffer { RayResult data[]; };
+layout(buffer_reference, std430) readonly buffer IndexToPixel { int data[]; };
+layout(buffer_reference, std430) buffer PixelBuffer { vec4 data[]; };
+layout(buffer_reference, scalar) readonly buffer DecreaseBuffer { vec3 data[]; };
+
+layout(buffer_reference, std430) readonly buffer GeometryBuffer {
+    Geometry data[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint64_t rayAddr;
+    uint64_t resultAddr;
+    uint64_t idxToPixelAddr;
+    uint64_t pixelAddr;
+    uint64_t decreaseAddr;
+    uint64_t geometryAddr;
+
+    vec3 light;
+    int numberOfRays;
+    vec3 backgroundColor;
+    int numberOfSamples;
+} pc;
+
+// Shading
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+    const uint taskIndex = gl_GlobalInvocationID.x;
+
+    RayBuffer rays = RayBuffer(pc.rayAddr);
+    RayResultBuffer results = RayResultBuffer(pc.resultAddr);
+    IndexToPixel indexToPixel = IndexToPixel(pc.idxToPixelAddr);
+    PixelBuffer pixels = PixelBuffer(pc.pixelAddr);
+    DecreaseBuffer decreases = DecreaseBuffer(pc.decreaseAddr);
+    GeometryBuffer geometries = GeometryBuffer(pc.geometryAddr);
+
+    if (taskIndex < pc.numberOfRays) {
+
+        // Pixel.
+        int pixel = indexToPixel.data[taskIndex];
+
+        // Color.
+        vec3 color = vec3(pixels.data[pixel]);
+
+        // Decrease.
+        vec3 decrease = decreases.data[pixel];
+
+        // Ray result.
+
+        // Ray.
+        Ray ray = rays.data[taskIndex];
+        RayResult result = results.data[taskIndex];
+
+        // Triangle index.
+        int primitiveId = result.primitiveId;
+
+        // Miss.
+        if (primitiveId == -1) {
+            color += decrease * pc.backgroundColor / float(pc.numberOfSamples);
+        }
+
+        // Hit.
+        else {
+            
+            // Fetch triangle.
+            Geometry geometry = geometries.data[result.geometryId];
+            Triangle tri = unpackTriangle(primitiveId, geometry, vec2(result.u, result.v));
+
+            // Colors.
+            vec3 L = normalize(pc.light - (ray.origin + ray.direction * result.t));
+
+            // N * L
+            float NdotL = dot(tri.normal, L);
+
+            // Diffuse.
+            float alpha = max(NdotL, 0.1f);
+
+            // Add color.
+            color += decrease * alpha / float(pc.numberOfSamples);
+
+        }
+
+        // Update color.
+        pixels.data[pixel] = vec4(color, 1.0f);
+
+    }
+
+}

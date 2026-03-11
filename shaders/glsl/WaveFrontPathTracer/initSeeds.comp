@@ -1,0 +1,43 @@
+#version 460
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_scalar_block_layout : require
+
+#define THREADBLOCK_SIZE 256
+
+uint tea(uint val0, uint val1, uint rounds) {
+    uint v0 = val0;
+    uint v1 = val1;
+    uint s0 = 0u;
+
+    for (uint n = 0; n < rounds; n++) {
+        s0 += 0x9e3779b9u;
+        v0 += ((v1 << 4) + 0xa341316cu) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4u);
+        v1 += ((v0 << 4) + 0xad90777du) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761eu);
+    }
+
+    return v0;
+}
+
+layout(buffer_reference, std430) writeonly buffer SeedBuffer { uint data[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint64_t seedAddr;
+    int numberOfPixels;
+    int frameIndex;
+} pc;
+
+// Initialize seeds
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+    const uint taskIndex = gl_GlobalInvocationID.x;
+
+    SeedBuffer seeds = SeedBuffer(pc.seedAddr);
+
+    if (taskIndex < pc.numberOfPixels) {
+
+        seeds.data[taskIndex] = tea(taskIndex, pc.frameIndex, 16);
+
+    }
+
+}
