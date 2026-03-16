@@ -1,10 +1,12 @@
 /*
-* Basic camera class providing a look-at and first-person camera
+* Basic camera class
 *
-* Copyright (C) 2016-2024 by Sascha Willems - www.saschawillems.de
+* Copyright (C) 2016-2023 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
+
+#pragma once
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -22,47 +24,35 @@ private:
 	{
 		glm::mat4 currentMatrix = matrices.view;
 
-		glm::mat4 rotM = glm::mat4(1.0f);
-		glm::mat4 transM;
+		glm::vec3 uVec = glm::vec3(1.0f, 0.0f, 0.0f);
+		glm::vec3 vVec = glm::vec3(0.0f, 1.0f, 0.0f);
+		glm::vec3 nVec = glm::vec3(0.0f, 0.0f, 1.0f);
 
-		rotM = glm::rotate(rotM, glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)), glm::vec3(1.0f, 0.0f, 0.0f));
-		rotM = glm::rotate(rotM, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-		rotM = glm::rotate(rotM, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+		if (glm::radians(rotation.y) != 0)
+			rotateAxis(glm::radians(rotation.y), &vVec, &nVec, &uVec);
+		if (glm::radians(-rotation.x) != 0)
+			rotateAxis(glm::radians(-rotation.x), &uVec, &vVec, &nVec);
+		if (glm::radians(rotation.z) != 0)
+			rotateAxis(glm::radians(rotation.z), &nVec, &uVec, &vVec);
 
-		glm::vec3 translation = position;
-		if (flipY) {
-			translation.y *= -1.0f;
-		}
-		transM = glm::translate(glm::mat4(1.0f), translation);
-
-		if (type == CameraType::firstperson)
-		{
-			matrices.view = rotM * transM;
-		}
-		else
-		{
-			matrices.view = transM * rotM;
-		}
-
-		viewPos = glm::vec4(position, 0.0f) * glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f);
+		glm::mat4 rot(glm::vec4(uVec, 0.0f), glm::vec4(vVec, 0.0f), glm::vec4(nVec, 0.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+		matrices.view = glm::translate(glm::transpose(rot), glm::vec3(-position.x, position.y, -position.z));
 
 		if (matrices.view != currentMatrix) {
 			updated = true;
 		}
+
 	};
 public:
-	enum CameraType { lookat, firstperson };
+	enum CameraType { lookat, firstperson, numTypes };
 	CameraType type = CameraType::lookat;
-
 	glm::vec3 rotation = glm::vec3();
 	glm::vec3 position = glm::vec3();
-	glm::vec4 viewPos = glm::vec4();
 
 	float rotationSpeed = 1.0f;
-	float movementSpeed = 1.0f;
+	float movementSpeed = 5.0f;
 
 	bool updated = true;
-	bool flipY = false;
 
 	struct
 	{
@@ -78,17 +68,40 @@ public:
 		bool down = false;
 	} keys;
 
-	bool moving() const
+	void rotateAxis(float rad_angle, glm::vec3* u, glm::vec3* v, glm::vec3* n) {  // rotate u, v->n
+		float sina, cosa;
+		glm::vec3 tempAxis;
+
+		sina = sin(rad_angle);
+		cosa = cos(rad_angle);
+
+		// calculate v vector
+		tempAxis = *v * cosa + glm::cross(*u, *v) * sina;
+		*v = tempAxis;
+		*v = glm::normalize(*v);
+
+		// calculate u vector
+		tempAxis = glm::cross(*u, *v);
+
+		*n = tempAxis;
+		*n = glm::normalize(*n);
+	}
+
+	bool moving()
 	{
 		return keys.left || keys.right || keys.up || keys.down;
 	}
 
-	float getNearClip() const {
+	float getNearClip() {
 		return znear;
 	}
 
-	float getFarClip() const {
+	float getFarClip() {
 		return zfar;
+	}
+
+	float getFov() {
+		return fov;
 	}
 
 	void setPerspective(float fov, float aspect, float znear, float zfar)
@@ -98,9 +111,8 @@ public:
 		this->znear = znear;
 		this->zfar = zfar;
 		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
-		if (flipY) {
-			matrices.perspective[1][1] *= -1.0f;
-		}
+		matrices.perspective[1][1] *= -1.0f;
+		
 		if (matrices.view != currentMatrix) {
 			updated = true;
 		}
@@ -110,9 +122,7 @@ public:
 	{
 		glm::mat4 currentMatrix = matrices.perspective;
 		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
-		if (flipY) {
-			matrices.perspective[1][1] *= -1.0f;
-		}
+		matrices.perspective[1][1] *= -1.0f;
 		if (matrices.view != currentMatrix) {
 			updated = true;
 		}
@@ -165,25 +175,42 @@ public:
 		{
 			if (moving())
 			{
-				glm::vec3 camFront;
-				camFront.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
-				camFront.y = sin(glm::radians(rotation.x));
-				camFront.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
-				camFront = glm::normalize(camFront);
-
 				float moveSpeed = deltaTime * movementSpeed;
 
-				if (keys.up)
-					position += camFront * moveSpeed;
-				if (keys.down)
-					position -= camFront * moveSpeed;
+				glm::vec3 uVec = glm::vec3(1.0f, 0.0f, 0.0f);
+				glm::vec3 vVec = glm::vec3(0.0f, 1.0f, 0.0f);
+				glm::vec3 nVec = glm::vec3(0.0f, 0.0f, 1.0f);
+
+				if (glm::radians(rotation.y) != 0)
+					rotateAxis(glm::radians(rotation.y), &vVec, &nVec, &uVec);
+				if (glm::radians(-rotation.x) != 0)
+					rotateAxis(glm::radians(-rotation.x), &uVec, &vVec, &nVec);
+				if (glm::radians(rotation.z) != 0)
+					rotateAxis(glm::radians(rotation.z), &nVec, &uVec, &vVec);
+
+				float x = moveSpeed;
+				float y = moveSpeed;
+				float z = moveSpeed;
+
+				if (keys.up) {
+					position -= glm::vec3(nVec.x * z, nVec.y * z, nVec.z * z);
+				}
+				if (keys.down) {
+					position += glm::vec3(nVec.x * z, nVec.y * z, nVec.z * z);
+				}
 				if (keys.left)
-					position -= glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
+				{
+					position -= glm::vec3(uVec.x * x, 0, uVec.z * x);
+				}
 				if (keys.right)
-					position += glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
+				{
+					position += glm::vec3(uVec.x * x, 0, uVec.z * x);
+				}
+
+				updateViewMatrix();
 			}
 		}
-		updateViewMatrix();
+		
 	};
 
 	// Update camera passing separate axis data (gamepad)
@@ -208,7 +235,7 @@ public:
 
 			float moveSpeed = deltaTime * movementSpeed * 2.0f;
 			float rotSpeed = deltaTime * rotationSpeed * 50.0f;
-			 
+
 			// Move
 			if (fabsf(axisLeft.y) > deadZone)
 			{
@@ -249,5 +276,4 @@ public:
 
 		return retVal;
 	}
-
 };

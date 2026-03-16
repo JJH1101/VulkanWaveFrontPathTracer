@@ -309,6 +309,11 @@ void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool
 	if (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
 		swapchainCI.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	}
+
+	if (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) {
+		swapchainCI.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+	}
+
 	VK_CHECK_RESULT(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapChain));
 
 	// If an existing swap chain is re-created, destroy the old swap chain and the ressources owned by the application (image views, images are owned by the swap chain)

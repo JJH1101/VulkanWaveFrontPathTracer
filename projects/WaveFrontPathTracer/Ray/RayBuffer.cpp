@@ -62,7 +62,7 @@ void RayBuffer::resize(vks::VulkanDevice& device, VkQueue queue, int size) {
     if (capacity < size) {
         capacity = size;
 
-        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         VkMemoryPropertyFlags memFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
         vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &rays, size * sizeof(Ray));

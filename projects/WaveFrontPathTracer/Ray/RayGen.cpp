@@ -22,7 +22,7 @@ float RayGen::initSeeds(int numberOfPixels, int frameIndex) {
     // Resize seeds.
     vks::util::resizeDiscardBuffer(
         *device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &seeds,
         numberOfPixels * sizeof(uint32_t)
@@ -76,7 +76,8 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
     pcPrimary.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getSlotToIndexBuffer().buffer);
     pcPrimary.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
     pcPrimary.screenToWorld = glm::inverse(camera.matrices.perspective * camera.matrices.view);
-    pcPrimary.origin = camera.position;
+    //pcPrimary.origin = camera.position;
+    pcPrimary.origin = glm::vec3(glm::inverse(camera.matrices.view) * glm::vec4(0.f, 0.f, 0.f, 1.f));
     pcPrimary.sampleIndex = sampleIndex;
     pcPrimary.size = extent;
     pcPrimary.maxDist = camera.getFarClip();
@@ -86,7 +87,7 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
 
     // Launch
     ComputePass::DispatchDesc dispatchDesc = { ((extent.x * extent.y) + workGroupSize - 1) / workGroupSize, 1, 1 };
-    return initSeedsPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
+    return primaryPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
 //float RayGen::shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const Vec3f & light, float lightRadius) {

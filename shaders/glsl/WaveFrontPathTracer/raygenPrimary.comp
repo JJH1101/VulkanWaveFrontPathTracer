@@ -30,9 +30,9 @@ layout(buffer_reference, std430) readonly buffer IndexToPixel { int data[]; };
 layout(buffer_reference, std430) writeonly buffer RayBuffer { Ray data[]; };
 
 layout(push_constant) uniform PushConstants {
+    mat4     screenToWorld;
     uint64_t indexToPixelAddr;
     uint64_t rayBufferAddr;
-    mat4     screenToWorld;
     vec3     origin;
     int      sampleIndex;
     ivec2    size;
@@ -68,7 +68,7 @@ void main() {
         // Compute ray.
         vec4 nscreenPos;
         nscreenPos.x = 2.0f * x / float(pc.size.x) - 1.0f;
-        nscreenPos.y = 2.0f * y / float(pc.size.y) - 1.0f;
+        nscreenPos.y = 1.0f - 2.0f * y / float(pc.size.y);
         nscreenPos.z = 0.0f;
         nscreenPos.w = 1.0f;
         vec4 worldPos4D = pc.screenToWorld * nscreenPos;

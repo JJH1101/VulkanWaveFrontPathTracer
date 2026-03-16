@@ -47,7 +47,7 @@ void main() {
         rayQueryInitializeEXT(
             rq, 
             topLevelAS, 
-            gl_RayFlagsNoneEXT,
+            gl_RayFlagsOpaqueEXT,
             0xFF,      
             ray.origin,
             ray.tmin,
@@ -56,9 +56,7 @@ void main() {
         );
 
         // Traversal.
-        while (rayQueryProceedEXT(rq)) {
-        
-        }
+        rayQueryProceedEXT(rq);
 
         // Record result.
         RayResult result;

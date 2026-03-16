@@ -51,9 +51,9 @@ private:
     } pcInitSeeds;
 
     struct PushConstantsPrimary {
+        glm::mat4 screenToWorld;
         uint64_t indexToPixelAddr;
         uint64_t rayBufferAddr;
-        glm::mat4 screenToWorld;
         glm::vec3 origin;
         int sampleIndex;
         glm::ivec2 size;

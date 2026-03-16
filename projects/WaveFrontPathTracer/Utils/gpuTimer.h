@@ -29,12 +29,17 @@ private:
 public:
 	~GPUTimer()
 	{
-		vkDestroyQueryPool(device, timeStampQueryPool, nullptr);
+		if (timeStampQueryPool != VK_NULL_HANDLE)
+			vkDestroyQueryPool(device, timeStampQueryPool, nullptr);
 	}
-	GPUTimer() = delete;
-	GPUTimer(VkDevice inDevice, float inTimestampPeriodDeviceLimit, uint32_t qeuryCount) : device(inDevice), timestampPeriodDeviceLimit(inTimestampPeriodDeviceLimit), queryCount(qeuryCount) { timerResults.resize(queryCount / 2); }
-	void init()
+	GPUTimer() {}
+	void init(vks::VulkanDevice& _device, uint32_t queryCount = 2)
 	{
+		this->device = _device.logicalDevice;
+		this->timestampPeriodDeviceLimit = _device.properties.limits.timestampPeriod;
+		this->queryCount = queryCount;
+		this->timerResults.resize(queryCount / 2);
+
 		VkQueryPoolCreateInfo queryPoolInfo{};
 		queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
 		queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
@@ -42,8 +47,10 @@ public:
 		VK_CHECK_RESULT(vkCreateQueryPool(device, &queryPoolInfo, nullptr, &timeStampQueryPool));
 
 #ifdef __ANDROID__
-        vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(vkGetDeviceProcAddr(device, "vkCmdWriteTimestamp"));
-#endif
+		vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+			vkGetDeviceProcAddr(device->logicalDevice, "vkCmdWriteTimestamp")
+		);
+#endif 
 	}
 	void reset(VkCommandBuffer cmdBuffer)
 	{

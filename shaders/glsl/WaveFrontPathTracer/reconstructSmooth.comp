@@ -85,6 +85,7 @@ void main() {
 
             // Diffuse.
             float alpha = max(NdotL, 0.1f);
+//            float alpha = abs(NdotL);
 
             // Add color.
             color += decrease * alpha / float(pc.numberOfSamples);

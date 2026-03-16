@@ -82,7 +82,7 @@ float Renderer::initDecreases(int numberOfPixels) {
 
     vks::util::resizeDiscardBuffer(
         *device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &decreases,
         numberOfPixels * sizeof(glm::vec3)
@@ -229,7 +229,7 @@ float Renderer::reconstructSmooth(vks::Buffer & geometies, glm::vec3 light, glm:
 
     pcReconstructSmooth.rayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
     pcReconstructSmooth.resultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
-    pcReconstructSmooth.idxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getIndexToSlotBuffer().buffer);
+    pcReconstructSmooth.idxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getSlotToIndexBuffer().buffer);
     pcReconstructSmooth.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
     pcReconstructSmooth.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
     pcReconstructSmooth.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometies.buffer);
@@ -406,7 +406,7 @@ float Renderer::trace(RayBuffer& rays) {
 
 Renderer::Renderer() :
     rayType(PRIMARY_RAYS),
-    keyValue(1.0f),
+    keyValue(0.18f),
     whitePoint(1.0f),
     aoRadius(1.0f),
     shadowRadius(1.0f),
@@ -738,7 +738,7 @@ void Renderer::setPathMortonCodeBits(int pathMortonCodeBits) {
     pathQueue.getOutputRays().setMortonCodeBits(pathMortonCodeBits);
 }
 
-float Renderer::render(vks::Buffer geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
+float Renderer::render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
 
     // Elapsed time.
     float time = 0.0f;
@@ -746,21 +746,21 @@ float Renderer::render(vks::Buffer geometries, glm::vec3 light, glm::vec3 backgr
     // Resize pixel buffers.
     vks::util::resizeDiscardBuffer(
         *device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &pixels,
         extent.x * extent.y * sizeof(glm::vec4)
     );
     vks::util::resizeDiscardBuffer(
         *device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &framePixels,
         extent.x * extent.y * sizeof(glm::vec4)
     );
     vks::util::resizeDiscardBuffer(
         *device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &auxPixels,
         extent.x * extent.y * sizeof(glm::vec4)

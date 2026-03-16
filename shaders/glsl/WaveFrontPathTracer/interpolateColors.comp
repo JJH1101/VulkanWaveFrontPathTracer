@@ -86,14 +86,16 @@ void main() {
             float b = a * (float(pc.frameIndex) - 1.0f);
             vec3 color = a * color1 + b * color0;
             pixels.data[taskIndex] = vec4(color, 1.0f);
-            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
+//            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
+            framePixels.data[taskIndex] = vec4(color, 1.0f);
         }
 
         // First frame => Just assign the color.
         else {
             vec4 color = framePixels.data[taskIndex];
             pixels.data[taskIndex] = color;
-            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
+//            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
+            framePixels.data[taskIndex] = color;
         }
 
     }

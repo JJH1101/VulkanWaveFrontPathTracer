@@ -140,15 +140,15 @@ private:
     int bounce;
     int frameIndex;
 
-    unsigned long long numberOfPrimaryRays;
-    unsigned long long numberOfShadowRays;
-    unsigned long long numberOfAORays;
-    unsigned long long numberOfPathRays;
+    unsigned long long numberOfPrimaryRays = 0;
+    unsigned long long numberOfShadowRays = 0;
+    unsigned long long numberOfAORays = 0;
+    unsigned long long numberOfPathRays = 0;
 
-    float primaryTraceTime;
-    float shadowTraceTime;
-    float aoTraceTime;
-    float pathTraceTime;
+    float primaryTraceTime = 0.f;
+    float shadowTraceTime = 0.f;
+    float aoTraceTime = 0.f;
+    float pathTraceTime = 0.f;
 
     PathQueue pathQueue;
     RayBuffer primaryRays;
@@ -242,7 +242,7 @@ public:
     int getPathMortonCodeBits(void);
     void setPathMortonCodeBits(int pathMortonCodeBits);
 
-    float render(vks::Buffer geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera & camera, glm::ivec2 extent, vks::Buffer & pixels, vks::Buffer & framePixels);
+    float render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera & camera, glm::ivec2 extent, vks::Buffer & pixels, vks::Buffer & framePixels);
 
     void resetFrameIndex(void);
 
