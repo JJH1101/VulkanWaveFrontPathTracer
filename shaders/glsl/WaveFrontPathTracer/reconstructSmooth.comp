@@ -81,7 +81,8 @@ void main() {
             vec3 L = normalize(pc.light - (ray.origin + ray.direction * result.t));
 
             // N * L
-            float NdotL = dot(tri.normal, L);
+            vec3 ffNormal = faceforward(tri.normal, ray.direction, tri.normal);
+            float NdotL = dot(ffNormal, L);
 
             // Diffuse.
             float alpha = max(NdotL, 0.1f);

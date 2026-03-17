@@ -36,7 +36,8 @@ private:
 			rotateAxis(glm::radians(rotation.z), &nVec, &uVec, &vVec);
 
 		glm::mat4 rot(glm::vec4(uVec, 0.0f), glm::vec4(vVec, 0.0f), glm::vec4(nVec, 0.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-		matrices.view = glm::translate(glm::transpose(rot), glm::vec3(-position.x, position.y, -position.z));
+		viewPos = glm::vec3(position.x, -position.y, position.z);
+		matrices.view = glm::translate(glm::transpose(rot), -viewPos);
 
 		if (matrices.view != currentMatrix) {
 			updated = true;
@@ -48,6 +49,7 @@ public:
 	CameraType type = CameraType::lookat;
 	glm::vec3 rotation = glm::vec3();
 	glm::vec3 position = glm::vec3();
+	glm::vec3 viewPos = glm::vec3();
 
 	float rotationSpeed = 1.0f;
 	float movementSpeed = 5.0f;
@@ -111,9 +113,8 @@ public:
 		this->znear = znear;
 		this->zfar = zfar;
 		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
-		matrices.perspective[1][1] *= -1.0f;
 		
-		if (matrices.view != currentMatrix) {
+		if (matrices.perspective != currentMatrix) {
 			updated = true;
 		}
 	};
@@ -122,8 +123,8 @@ public:
 	{
 		glm::mat4 currentMatrix = matrices.perspective;
 		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
-		matrices.perspective[1][1] *= -1.0f;
-		if (matrices.view != currentMatrix) {
+
+		if (matrices.perspective != currentMatrix) {
 			updated = true;
 		}
 	}

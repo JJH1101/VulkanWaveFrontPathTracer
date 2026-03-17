@@ -68,7 +68,7 @@ void main() {
         // Compute ray.
         vec4 nscreenPos;
         nscreenPos.x = 2.0f * x / float(pc.size.x) - 1.0f;
-        nscreenPos.y = 1.0f - 2.0f * y / float(pc.size.y);
+        nscreenPos.y = 2.0f * y / float(pc.size.y) - 1.0f;
         nscreenPos.z = 0.0f;
         nscreenPos.w = 1.0f;
         vec4 worldPos4D = pc.screenToWorld * nscreenPos;

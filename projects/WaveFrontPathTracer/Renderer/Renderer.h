@@ -86,7 +86,7 @@ private:
         int frameIndex;
         float keyValue;
         float whitePoint;
-    } pcInterpolateColors;
+    };
 
     struct PushConstantsReconstructSmooth {
         uint64_t rayAddr;
@@ -100,13 +100,13 @@ private:
         int numberOfRays;
         glm::vec3 backgroundColor;
         int numberOfSamples;
-    } pcReconstructSmooth;
+    };
 
     struct PushConstantsTrace {
         uint64_t rayBufferAddr;
         uint64_t resultBufferAddr;
         uint32_t numRays;
-    } pcTrace;
+    };
 
     VkDescriptorPool descriptorPoolTrace{ VK_NULL_HANDLE };
     VkDescriptorSetLayout descriptorSetLayoutTrace{ VK_NULL_HANDLE };

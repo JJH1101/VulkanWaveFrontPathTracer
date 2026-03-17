@@ -29,11 +29,12 @@ float RayGen::initSeeds(int numberOfPixels, int frameIndex) {
     );
 
     // Set push constants
-    pcInitSeeds.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
-    pcInitSeeds.numberOfPixels = numberOfPixels;
-    pcInitSeeds.frameIndex = frameIndex;
+    PushConstantsInitSeeds pc{};
+    pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
+    pc.numberOfPixels = numberOfPixels;
+    pc.frameIndex = frameIndex;
 
-    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsInitSeeds), &pcInitSeeds };
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsInitSeeds), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
 
     // Launch
@@ -73,16 +74,16 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
     orays.getIndexToSlotBuffer() = pixelTable.getPixelToIndex();
 
     // Set push constants
-    pcPrimary.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getSlotToIndexBuffer().buffer);
-    pcPrimary.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
-    pcPrimary.screenToWorld = glm::inverse(camera.matrices.perspective * camera.matrices.view);
-    //pcPrimary.origin = camera.position;
-    pcPrimary.origin = glm::vec3(glm::inverse(camera.matrices.view) * glm::vec4(0.f, 0.f, 0.f, 1.f));
-    pcPrimary.sampleIndex = sampleIndex;
-    pcPrimary.size = extent;
-    pcPrimary.maxDist = camera.getFarClip();
+    PushConstantsPrimary pc{};
+    pc.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getSlotToIndexBuffer().buffer);
+    pc.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
+    pc.screenToWorld = glm::inverse(camera.matrices.perspective * camera.matrices.view);
+    pc.origin = camera.viewPos;
+    pc.sampleIndex = sampleIndex;
+    pc.size = extent;
+    pc.maxDist = camera.getFarClip();
 
-    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsPrimary), &pcPrimary };
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsPrimary), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
 
     // Launch

@@ -504,7 +504,7 @@ public:
 			renderer.resetFrameIndex();
 		}
 
-		light = camera.position;
+		light = camera.viewPos;
 
 		glm::vec3 bgColor = glm::vec3(0.529f, 0.808f, 0.98f);
 

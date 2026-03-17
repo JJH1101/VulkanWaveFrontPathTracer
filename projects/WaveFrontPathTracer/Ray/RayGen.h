@@ -48,7 +48,7 @@ private:
         uint64_t seedAddr;
         int numberOfPixels;
         int frameIndex;
-    } pcInitSeeds;
+    };
 
     struct PushConstantsPrimary {
         glm::mat4 screenToWorld;
@@ -58,7 +58,7 @@ private:
         int sampleIndex;
         glm::ivec2 size;
         float maxDist;
-    } pcPrimary;
+    };
 
 public:
 

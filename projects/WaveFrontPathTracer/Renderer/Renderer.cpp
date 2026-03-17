@@ -93,14 +93,15 @@ float Renderer::initDecreases(int numberOfPixels) {
 
 float Renderer::interpolateColors(int numberOfPixels, vks::Buffer& pixels, vks::Buffer& framePixels) {
 
-    pcInterpolateColors.framePixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, framePixels.buffer);
-    pcInterpolateColors.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
-    pcInterpolateColors.numberOfPixels = numberOfPixels;
-    pcInterpolateColors.frameIndex = frameIndex;
-    pcInterpolateColors.keyValue = keyValue;
-    pcInterpolateColors.whitePoint = whitePoint;
+    PushConstantsInterpolateColors pc{};
+    pc.framePixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, framePixels.buffer);
+    pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
+    pc.numberOfPixels = numberOfPixels;
+    pc.frameIndex = frameIndex;
+    pc.keyValue = keyValue;
+    pc.whitePoint = whitePoint;
 
-    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsInterpolateColors), &pcInterpolateColors };
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsInterpolateColors), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
 
     // Launch
@@ -227,18 +228,19 @@ float Renderer::reconstructSmooth(vks::Buffer & geometies, glm::vec3 light, glm:
 
     int numRays = rays.getSize();
 
-    pcReconstructSmooth.rayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
-    pcReconstructSmooth.resultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
-    pcReconstructSmooth.idxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getSlotToIndexBuffer().buffer);
-    pcReconstructSmooth.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
-    pcReconstructSmooth.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
-    pcReconstructSmooth.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometies.buffer);
-    pcReconstructSmooth.light = light;
-    pcReconstructSmooth.numberOfRays = numRays;
-    pcReconstructSmooth.backgroundColor = backgroundColor;
-    pcReconstructSmooth.numberOfSamples = numberOfPrimarySamples;
+    PushConstantsReconstructSmooth pc{};
+    pc.rayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
+    pc.resultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
+    pc.idxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getSlotToIndexBuffer().buffer);
+    pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
+    pc.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
+    pc.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometies.buffer);
+    pc.light = light;
+    pc.numberOfRays = numRays;
+    pc.backgroundColor = backgroundColor;
+    pc.numberOfSamples = numberOfPrimarySamples;
 
-    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsReconstructSmooth), &pcReconstructSmooth };
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsReconstructSmooth), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
 
     // Launch
@@ -391,11 +393,12 @@ float Renderer::trace(RayBuffer& rays) {
     int numRays = rays.getSize();
 
     // Set push constants
-    pcTrace.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
-    pcTrace.resultBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
-    pcTrace.numRays = numRays;
+    PushConstantsTrace pc{};
+    pc.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
+    pc.resultBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
+    pc.numRays = numRays;
 
-    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsTrace), &pcTrace };
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsTrace), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
     std::vector<VkDescriptorSet> descriptorSets = { descriptorSetTrace };
 

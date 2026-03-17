@@ -251,6 +251,28 @@ void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool
 		}
 	}
 
+#ifndef VK_USE_PLATFORM_ANDROID_KHR
+	std::cout << "Present mode(VkPresentModeKHR) is ";
+	switch (swapchainPresentMode) {
+	case 0:
+		std::cout << "VK_PRESENT_MODE_IMMEDIATE_KHR";
+		break;
+	case 1:
+		std::cout << "VK_PRESENT_MODE_MAILBOX_KHR";
+		break;
+	case 2:
+		std::cout << "VK_PRESENT_MODE_FIFO_KHR";
+		break;
+	case 3:
+		std::cout << "VK_PRESENT_MODE_FIFO_RELAXED_KHR";
+		break;
+	default:
+		std::cout << "none of the four major modes";
+		break;
+	}
+	std::cout << ".\n";
+#endif
+
 	// Determine the number of images
 	uint32_t desiredNumberOfSwapchainImages = surfaceCaps.minImageCount + 1;
 	if ((surfaceCaps.maxImageCount > 0) && (desiredNumberOfSwapchainImages > surfaceCaps.maxImageCount)) {
