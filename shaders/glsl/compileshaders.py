@@ -64,7 +64,7 @@ for root, dirs, files in os.walk(dir_path):
             if root.endswith("rayquery") and file.endswith(".frag"):
                 add_params = add_params + " --target-env vulkan1.2"
             # Mesh and task shader also require different settings
-            if file.endswith(".mesh") or file.endswith(".task"):
+            if file.endswith(".mesh") or file.endswith(".task") or file.endswith(".comp"):
                 add_params = add_params + " --target-env spirv1.4"
 
             res = subprocess.call("%s -V %s -o %s %s" % (glslang_path, input_file, output_file, add_params), shell=True)

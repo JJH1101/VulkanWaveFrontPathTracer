@@ -25,9 +25,9 @@ vec2 halton2D(int i) {
     return vec2(halton(i, 2), halton(i, 3));
 }
 
-layout(buffer_reference, std430) readonly buffer IndexToPixel { int data[]; };
+layout(buffer_reference, std430) readonly restrict buffer IndexToPixel { int data[]; };
 
-layout(buffer_reference, std430) writeonly buffer RayBuffer { Ray data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer RayBuffer { Ray data[]; };
 
 layout(push_constant) uniform PushConstants {
     mat4     screenToWorld;

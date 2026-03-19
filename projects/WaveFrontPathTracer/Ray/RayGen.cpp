@@ -62,6 +62,13 @@ void RayGen::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     pipelineContext.shaderEntry.module = shaderModule;
     pipelineContext.pushConstantRanges = { pushConstantRange };
     primaryPass.createPipeline(*device, pipelineContext);
+
+    // Create shadow pipeline
+    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "raygenShadow.comp.spv").c_str(), device->logicalDevice);
+    pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsShadow) };
+    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.pushConstantRanges = { pushConstantRange };
+    shadowPass.createPipeline(*device, pipelineContext);
 }
 
 float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, int sampleIndex) {
@@ -73,7 +80,7 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
     orays.getSlotToIndexBuffer() = pixelTable.getIndexToPixel();
     orays.getIndexToSlotBuffer() = pixelTable.getPixelToIndex();
 
-    // Set push constants
+    // Set push constants.
     PushConstantsPrimary pc{};
     pc.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getSlotToIndexBuffer().buffer);
     pc.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
@@ -91,36 +98,34 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
     return primaryPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
-//float RayGen::shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const Vec3f & light, float lightRadius) {
-//
-//    // Closest hit.
-//    orays.resize((batchEnd - batchBegin) * numberOfSamples);
-//    orays.setClosestHit(false);
-//
-//    // Compile kernel.
-//    HipModule * module = compiler.compile();
-//    HipKernel kernel = module->getKernel("generateShadowRays");
-//
-//    // Set parameters.
-//    kernel.setParams(
-//        batchBegin,
-//        batchEnd - batchBegin,
-//        numberOfSamples,
-//        seeds,
-//        lightRadius,
-//        light,
-//        irays.getRayBuffer(),
-//        orays.getRayBuffer(),
-//        irays.getResultBuffer(),
-//        orays.getSlotToIndexBuffer(),
-//        orays.getIndexToSlotBuffer()
-//    );
-//
-//    // Launch.
-//    return kernel.launchTimed(batchEnd - batchBegin);
-//
-//}
-//
+float RayGen::shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const glm::vec3 & light, float lightRadius) {
+
+    // First hit.
+    orays.resize(*device, queue, (batchEnd - batchBegin) * numberOfSamples);
+    orays.setClosestHit(false);
+
+    // Set push constants
+    PushConstantsShadow pc{};
+    pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
+    pc.inputRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getRayBuffer().buffer);
+    pc.outputRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
+    pc.inputResultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getResultBuffer().buffer);
+    pc.outputSlotToIndexAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getSlotToIndexBuffer().buffer);
+    pc.outputIndexToSlotAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getIndexToSlotBuffer().buffer);
+    pc.light = light;
+    pc.lightRadius = lightRadius;
+    pc.batchBegin = batchBegin;
+    pc.batchSize = batchEnd - batchBegin;
+    pc.numberOfSamples = numberOfSamples;
+
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsShadow), &pc };
+    std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
+
+    // Launch
+    ComputePass::DispatchDesc dispatchDesc = { ((batchEnd - batchBegin) + workGroupSize - 1) / workGroupSize, 1, 1 };
+    return shadowPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
+}
+
 //float RayGen::ao(RayBuffer & orays, RayBuffer & irays, Scene & scene, int batchBegin, int batchEnd, int numberOfSamples, float maxDist) {
 //
 //    // Closest hit.

@@ -1,14 +1,13 @@
 #version 460
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-#extension GL_EXT_scalar_block_layout : require
 
 #define THREADBLOCK_SIZE_X 16
 #define THREADBLOCK_SIZE_Y 16
 
-layout(buffer_reference, std430) readonly buffer PixelBuffer { vec4 data[]; };
-layout(buffer_reference, std430) readonly buffer PixelToIndex { int data[]; };
-layout(set = 0, binding = 0, rgba8) uniform writeonly image2D outImage;
+layout(buffer_reference, std430) readonly restrict buffer PixelBuffer { vec4 data[]; };
+layout(buffer_reference, std430) readonly restrict buffer PixelToIndex { int data[]; };
+layout(set = 0, binding = 0, rgba8) uniform writeonly restrict image2D outImage;
 
 layout(push_constant) uniform PushConstants {
     uint64_t pixelAddr;

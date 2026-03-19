@@ -2,22 +2,18 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-#extension GL_EXT_scalar_block_layout : require
 
 #define THREADBLOCK_SIZE 256
 
 #include "ray.glsl"
 #include "geometrytypes.glsl"
 
-layout(buffer_reference, std430) readonly buffer RayBuffer { Ray data[]; };
-layout(buffer_reference, std430) readonly buffer RayResultBuffer { RayResult data[]; };
-layout(buffer_reference, std430) readonly buffer IndexToPixel { int data[]; };
-layout(buffer_reference, std430) buffer PixelBuffer { vec4 data[]; };
-layout(buffer_reference, scalar) readonly buffer DecreaseBuffer { vec3 data[]; };
-
-layout(buffer_reference, std430) readonly buffer GeometryBuffer {
-    Geometry data[];
-};
+layout(buffer_reference, std430) readonly restrict buffer RayBuffer { Ray data[]; };
+layout(buffer_reference, std430) readonly restrict buffer RayResultBuffer { RayResult data[]; };
+layout(buffer_reference, std430) readonly restrict buffer IndexToPixel { int data[]; };
+layout(buffer_reference, std430) restrict buffer PixelBuffer { vec4 data[]; };
+layout(buffer_reference, std430) readonly restrict buffer DecreaseBuffer { vec4 data[]; };
+layout(buffer_reference, std430) readonly restrict buffer GeometryBuffer { Geometry data[]; };
 
 layout(push_constant) uniform PushConstants {
     uint64_t rayAddr;
@@ -54,13 +50,13 @@ void main() {
         vec3 color = vec3(pixels.data[pixel]);
 
         // Decrease.
-        vec3 decrease = decreases.data[pixel];
+        vec3 decrease = decreases.data[pixel].xyz;
 
         // Ray result.
+        RayResult result = results.data[taskIndex];
 
         // Ray.
         Ray ray = rays.data[taskIndex];
-        RayResult result = results.data[taskIndex];
 
         // Triangle index.
         int primitiveId = result.primitiveId;

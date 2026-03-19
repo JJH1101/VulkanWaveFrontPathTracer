@@ -43,6 +43,7 @@ private:
 
     ComputePass initSeedsPass;
     ComputePass primaryPass;
+    ComputePass shadowPass;
 
     struct PushConstantsInitSeeds {
         uint64_t seedAddr;
@@ -60,6 +61,20 @@ private:
         float maxDist;
     };
 
+    struct PushConstantsShadow{
+        uint64_t seedAddr;
+        uint64_t inputRayAddr;
+        uint64_t outputRayAddr;
+        uint64_t inputResultAddr;
+        uint64_t outputSlotToIndexAddr;
+        uint64_t outputIndexToSlotAddr;
+        glm::vec3 light;
+        float lightRadius;
+        int batchBegin;
+        int batchSize;
+        int numberOfSamples;
+    };
+
 public:
 
     RayGen(void) = default;
@@ -72,7 +87,7 @@ public:
     float initSeeds(int numberOfPixels, int frameIndex = 1);
 
     float primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, int sampleIndex);
-    //float shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const Vec3f & light, float lightRadius);
+    float shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const glm::vec3 & light, float lightRadius);
     //float ao(RayBuffer & orays, RayBuffer & irays, Scene & scene, int batchBegin, int batchEnd, int numberOfSamples, float maxDist);
     //float path(RayBuffer & orays, RayBuffer & irays, Buffer & decreases, Scene & scene);
 

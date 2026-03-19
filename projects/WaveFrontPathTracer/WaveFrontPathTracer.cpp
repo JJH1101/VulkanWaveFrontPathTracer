@@ -52,7 +52,6 @@ public:
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{};
 	VkPhysicalDeviceHostQueryResetFeaturesEXT physicalDeviceHostQueryResetFeatures{};
-	VkPhysicalDeviceScalarBlockLayoutFeatures physicalDeviceScalarBlockRayoutFeatures{};
 
 	VulkanExample() : VulkanRaytracingSample()
 	{
@@ -463,11 +462,7 @@ public:
 		physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
 		physicalDeviceDescriptorIndexingFeatures.pNext = &enabledAccelerationStructureFeatures;
 
-		physicalDeviceScalarBlockRayoutFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
-		physicalDeviceScalarBlockRayoutFeatures.scalarBlockLayout = VK_TRUE;
-		physicalDeviceScalarBlockRayoutFeatures.pNext = &physicalDeviceDescriptorIndexingFeatures;
-
-		deviceCreatepNextChain = &physicalDeviceScalarBlockRayoutFeatures;
+		deviceCreatepNextChain = &physicalDeviceDescriptorIndexingFeatures;
 
 		// Original Features using VkPhysicalDeviceFeature structure.
 		enabledFeatures.shaderInt64 = VK_TRUE;	// Buffer device address requires the 64-bit integer feature to be enabled

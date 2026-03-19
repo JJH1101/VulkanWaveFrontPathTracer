@@ -75,9 +75,17 @@ private:
     VkQueue queue{ VK_NULL_HANDLE };
     GPUTimer* timer = nullptr;
 
+    ComputePass countRayHitsPass;
     ComputePass interpolateColorsPass;
     ComputePass reconstructSmoothPass;
+    ComputePass reconstructShadowPass;
     ComputePass tracePass;
+
+    struct PushConstantsCountRayHits {
+        uint64_t rayResultAddr;
+        uint64_t rayHitAddr;
+        int numberOfRays;
+    };
 
     struct PushConstantsInterpolateColors {
         uint64_t framePixelAddr;
@@ -102,10 +110,23 @@ private:
         int numberOfSamples;
     };
 
+    struct PushConstantsReconstructShadow {
+        uint64_t outputResultAddr;
+        uint64_t indexToPixelAddr;
+        uint64_t indexToSlotAddr;
+        uint64_t inPixelAddr;
+        uint64_t outPixelAddr;
+        int batchBegin;
+        int batchSize;
+        int numberOfSamples;
+        int replace;
+    };
+
     struct PushConstantsTrace {
         uint64_t rayBufferAddr;
         uint64_t resultBufferAddr;
         uint32_t numRays;
+        uint32_t isClosestHit;
     };
 
     VkDescriptorPool descriptorPoolTrace{ VK_NULL_HANDLE };
@@ -157,6 +178,11 @@ private:
     vks::Buffer auxPixels;
     vks::Buffer decreases;
     vks::Buffer seeds;
+    vks::Buffer counterDevice;
+    vks::Buffer counterHost;
+
+    glm::vec3 backgroundColor{};
+    glm::vec3 light{};
 
     RayType stringToRayType(const std::string & rayType);
 
@@ -164,26 +190,26 @@ private:
     float initDecreases(int numberOfPixels);
     float interpolateColors(int numberOfPixels, vks::Buffer & pixels, vks::Buffer & framePixels);
 
-    float primaryPass(vks::Buffer geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
-    //float shadowPass(Scene & scene, RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, bool replace);
+    float primaryPass(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace);
     //float aoPass(Scene & scene, RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, bool replace);
     //float pathPass(Scene & scene, Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays);
 
-    float renderPrimary(vks::Buffer geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
-    //float renderShadow(Scene & scene, Camera & camera, Buffer & pixels);
+    float renderPrimary(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float renderShadow(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     //float renderAO(Scene & scene, Camera & camera, Buffer & pixels);
     //float renderPath(Scene & scene, Camera & camera, Buffer & pixels);
     //float renderPseudocolor(Scene & scene, Camera & camera, Buffer & pixels);
     //float renderThermal(Camera & camera, Buffer & pixels);
 
-    float reconstructSmooth(vks::Buffer& geometies, glm::vec3 light, glm::vec3 backgroundColor, RayBuffer& rays, vks::Buffer& pixels);
+    float reconstructSmooth(vks::Buffer& geometies, RayBuffer& rays, vks::Buffer& pixels);
     //float reconstructPseudocolor(Scene & scene, Buffer & pixels);
     //float reconstructThermal(Buffer & pixels);
-    //float reconstructShadow(RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, int batchBegin, int batchEnd, bool replace);
+    float reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, int batchBegin, int batchEnd, bool replace);
     //float reconstructAO(RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, int batchBegin, int batchEnd, bool replace);
 
     float tracePrimaryRays(Camera & camera, glm::ivec2& extent);
-    //float traceShadowRays(Scene & scene, RayBuffer & inRays, int batchBegin, int batchEnd);
+    float traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd);
     //float traceAORays(Scene & scene, RayBuffer & inRays, int batchBegin, int batchEnd);
     //float tracePathRays(Scene & scene, RayBuffer & inRays, RayBuffer & outRays);
 

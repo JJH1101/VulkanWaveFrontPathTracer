@@ -1,0 +1,51 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+
+#define THREADBLOCK_SIZE 256
+
+#include "ray.glsl"
+
+layout(buffer_reference, std430) writeonly restrict buffer RayHitBuffer { uint data; };
+layout(buffer_reference, std430) readonly restrict buffer ResultBuffer { RayResult data[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint64_t rayResultAddr;
+    uint64_t rayHitAddr;
+    int numberOfRays;
+} pc;
+
+shared uint cache[32];
+
+// Generate Shadow Rays
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+
+    // Task index.
+    const uint taskIndex = gl_GlobalInvocationID.x;
+
+    // Buffer references.
+    ResultBuffer rayResults = ResultBuffer(pc.rayResultAddr);
+    RayHitBuffer rayHits = RayHitBuffer(pc.rayHitAddr);
+
+    uint _rayHits = 0;
+    if(taskIndex < pc.numberOfRays && rayResults.data[taskIndex].primitiveId >= 0)
+        ++_rayHits;
+
+    _rayHits = subgroupAdd(_rayHits);
+
+    if(subgroupElect()) cache[gl_SubgroupID] = _rayHits;
+    barrier();
+
+    if(gl_SubgroupID == 0) {
+        _rayHits = (gl_SubgroupInvocationID < gl_NumSubgroups) ? cache[gl_SubgroupInvocationID] : 0;
+        _rayHits = subgroupAdd(_rayHits);
+
+        if(subgroupElect()) {
+            atomicAdd(rayHits.data, _rayHits);
+        }
+    }
+    
+}

@@ -1,0 +1,139 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#define THREADBLOCK_SIZE 256
+
+#include "ray.glsl"
+
+void jenkinsMix(inout uint a, inout uint b, inout uint c) {
+    a -= b; a -= c; a ^= (c >> 13);
+    b -= c; b -= a; b ^= (a << 8);
+    c -= a; c -= b; c ^= (b >> 13);
+    a -= b; a -= c; a ^= (c >> 12);
+    b -= c; b -= a; b ^= (a << 16);
+    c -= a; c -= b; c ^= (b >> 5);
+    a -= b; a -= c; a ^= (c >> 3);
+    b -= c; b -= a; b ^= (a << 10);
+    c -= a; c -= b; c ^= (b >> 15); // ~36 instructions
+}
+
+vec2 sobol2D(uint i) {
+    vec2 result;
+    // Remaining components by matrix multiplication.
+    uint r1 = 0, r2 = 0;
+    for (uint v1 = 1u << 31, v2 = 3u << 30; i > 0u; i >>= 1) {
+        if ((i & 1u) == 1) {
+            // Vector addition of matrix column by XOR.
+            r1 ^= v1;
+            r2 ^= v2 << 1;
+        }
+        // Update matrix columns.
+        v1 |= v1 >> 1;
+        v2 ^= v2 >> 1;
+    }
+    // Map to unit cube [0,1)^2.
+    result.x = float(r1) / 4294967296.0;
+    result.y = float(r2) / 4294967296.0;
+    return result;
+}
+
+float hammersley(uint i, int num) {
+    return (float(i) + 0.5f) / float(num);
+}
+
+layout(buffer_reference, std430) readonly restrict buffer SeedBuffer { uint data[]; };
+layout(buffer_reference, std430) readonly restrict buffer InputRayBuffer { Ray data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer OutputRayBuffer { Ray data[]; };
+layout(buffer_reference, std430) readonly restrict buffer ResultBuffer { RayResult data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer OutputIndexBuffer { int data[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint64_t seedAddr;
+    uint64_t inputRayAddr;
+    uint64_t outputRayAddr;
+    uint64_t inputResultAddr;
+    uint64_t outputSlotToIndexAddr;
+    uint64_t outputIndexToSlotAddr;
+    vec3 light;
+    float lightRadius;
+    int batchBegin;
+    int batchSize;
+    int numberOfSamples;
+} pc;
+
+// Generate Shadow Rays
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+
+    // Task index.
+    const uint taskIndex = gl_GlobalInvocationID.x;
+
+    // Buffer references.
+    SeedBuffer seeds = SeedBuffer(pc.seedAddr);
+    InputRayBuffer inputRays = InputRayBuffer(pc.inputRayAddr);
+    OutputRayBuffer outputRays = OutputRayBuffer(pc.outputRayAddr);
+    ResultBuffer inputResults = ResultBuffer(pc.inputResultAddr);
+    OutputIndexBuffer outputSlotToIndex = OutputIndexBuffer(pc.outputSlotToIndexAddr);
+    OutputIndexBuffer outputIndexToSlot = OutputIndexBuffer(pc.outputIndexToSlotAddr);
+
+    // Only valid threads.
+    if (taskIndex < pc.batchSize) {
+
+        // Seed.
+        uint seed = seeds.data[taskIndex];
+
+        // Input ray.
+        Ray inputRay = inputRays.data[pc.batchBegin + taskIndex];
+        RayResult inputResult = inputResults.data[pc.batchBegin + taskIndex];
+
+        // Pick random offset.
+        uint hashA = seed + taskIndex;
+        uint hashB = 0x9e3779b9u;
+        uint hashC = 0x9e3779b9u;
+        jenkinsMix(hashA, hashB, hashC);
+        jenkinsMix(hashA, hashB, hashC);
+        vec3 offset = vec3(float(hashA) * exp2(-32.0f), float(hashB) * exp2(-32.0f), float(hashC) * exp2(-32.0f));
+
+        // Generate each sample.
+        int tri = inputResult.primitiveId;
+
+        // Ray index.
+        int rayIndex = pc.numberOfSamples * int(taskIndex);
+
+        // Compute origin, backtracking a little bit.
+        const float EPSILON = 1.0e-5f;
+        vec3 origin = inputRay.origin + inputRay.direction * max(inputResult.t - EPSILON, 0.0f);
+        if (tri == -1) origin = vec3(0.0f);
+
+        for (uint i = 0; i < pc.numberOfSamples; ++i) {
+
+            // QMC.
+            vec3 position = vec3(sobol2D(i), hammersley(i, pc.numberOfSamples)); // [0,1]
+            position += offset; // Cranley-Patterson
+            if (position.x >= 1.0f) position.x -= 1.0f;
+            if (position.y >= 1.0f) position.y -= 1.0f;
+            if (position.z >= 1.0f) position.z -= 1.0f;
+            position = 2.0f * position - vec3(1.0f); // [-1,1]
+
+            // Target position.
+            const vec3 target = pc.light + pc.lightRadius * position;
+            const vec3 direction = target - origin;
+
+            // Output ray.
+            Ray outputRay;
+            outputRay.origin = origin;
+            outputRay.direction = tri == -1 ? vec3(1.0f, 0.0f, 0.0f) : normalize(direction);
+            outputRay.tmin = 0.0f;
+            outputRay.tmax = tri == -1 ? -1.0f : length(direction);
+            outputRays.data[rayIndex] = outputRay;
+            outputSlotToIndex.data[rayIndex] = rayIndex;
+            outputIndexToSlot.data[rayIndex] = rayIndex;
+            ++rayIndex;
+
+        }
+
+    }
+
+}
