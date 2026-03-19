@@ -35,6 +35,8 @@ private:
 
     PixelTable pixelTable;
     vks::Buffer seeds;
+    vks::Buffer counterDevice;
+    vks::Buffer counterHost;
     bool russianRoulette;
 
     vks::VulkanDevice* device;
@@ -44,6 +46,7 @@ private:
     ComputePass initSeedsPass;
     ComputePass primaryPass;
     ComputePass shadowPass;
+    ComputePass pathPass;
 
     struct PushConstantsInitSeeds {
         uint64_t seedAddr;
@@ -75,11 +78,27 @@ private:
         int numberOfSamples;
     };
 
+    struct PushConstantsPath {
+        uint64_t seedAddr;
+        uint64_t geometryAddr;
+        uint64_t inputRayAddr;
+        uint64_t outputRayAddr;
+        uint64_t inputIndexToPixelAddr;
+        uint64_t outputIndexToPixelAddr;
+        uint64_t inputResultAddr;
+        uint64_t decreaseAddr;
+        uint64_t numberOfOutputRayAddr;
+        int numberOfInputRays;
+        int russianRoulette;
+    };
+
 public:
 
     RayGen(void) = default;
     ~RayGen(void) {
         seeds.destroy();
+        counterDevice.destroy();
+        counterHost.destroy();
     }
 
     void init(vks::VulkanDevice& device, GPUTimer& timer, VkQueue queue);
@@ -89,7 +108,7 @@ public:
     float primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, int sampleIndex);
     float shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const glm::vec3 & light, float lightRadius);
     //float ao(RayBuffer & orays, RayBuffer & irays, Scene & scene, int batchBegin, int batchEnd, int numberOfSamples, float maxDist);
-    //float path(RayBuffer & orays, RayBuffer & irays, Buffer & decreases, Scene & scene);
+    float path(RayBuffer & orays, RayBuffer & irays, vks::Buffer & decreases, vks::Buffer & geometries);
 
     bool getRussianRoulette(void);
     void setRussianRoulette(bool russianRoulette);

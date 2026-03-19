@@ -69,6 +69,13 @@ void RayGen::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     pipelineContext.shaderEntry.module = shaderModule;
     pipelineContext.pushConstantRanges = { pushConstantRange };
     shadowPass.createPipeline(*device, pipelineContext);
+
+    // Create path pipeline
+    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "raygenPath.comp.spv").c_str(), device->logicalDevice);
+    pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsPath) };
+    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.pushConstantRanges = { pushConstantRange };
+    pathPass.createPipeline(*device, pipelineContext);
 }
 
 float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, int sampleIndex) {
@@ -156,61 +163,59 @@ float RayGen::shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int b
 //    return kernel.launchTimed(batchEnd - batchBegin);
 //
 //}
-//
-//float RayGen::path(RayBuffer & orays, RayBuffer & irays, Buffer & decreases, Scene & scene) {
-//
-//    // Closest hit.
-//    orays.resize(irays.getSize());
-//    orays.setClosestHit(true);
-//
-//    // Compile kernel.
-//    HipModule * module = compiler.compile();
-//    HipKernel kernel = module->getKernel("generatePathRays");
-//
-//    // Set scene data.
-//    memcpy(module->getGlobal("materials").getMutablePtr(), scene.getMaterialBuffer().getPtr(),
-//        sizeof(Material) * qMin(scene.getNumberOfMaterials(), MAX_MATERIALS));
-//    if (scene.hasTextures()) {
-//        TextureAtlas & textureAtlas = scene.getTextureAtlas();
-//        TextureItem * diffuseTexturesItems = (TextureItem*)module->getGlobal("diffuseTextureItems").getMutablePtr();
-//        for (int i = 0; i < qMin(textureAtlas.getNumberOfTextures(), MAX_MATERIALS); ++i)
-//            diffuseTexturesItems[i] = textureAtlas.getTextureItems()[i];
-//    }
-//
-//    // Number of output rays buffer.
-//    Buffer numberOfRaysBuffer;
-//    numberOfRaysBuffer.resizeDiscard(sizeof(int));
-//    numberOfRaysBuffer.clear();
-//
-//    // Set parameters.
-//    kernel.setParams(
-//        russianRoulette,
-//        irays.getSize(),
-//        (unsigned long long)scene.getTextureAtlas().getTextureObject(),
-//        seeds,
-//        numberOfRaysBuffer,
-//        irays.getSlotToIndexBuffer(),
-//        orays.getSlotToIndexBuffer(),
-//        scene.getMatIndexBuffer(),
-//        scene.getTriangleBuffer(),
-//        scene.getNormalBuffer(),
-//        scene.getTexCoordBuffer(),
-//        irays.getRayBuffer(),
-//        orays.getRayBuffer(),
-//        irays.getResultBuffer(),
-//        decreases
-//    );
-//
-//    // Launch.
-//    float time = kernel.launchTimed(irays.getSize());
-//
-//    // Resize ouput rays.
-//    int numberOfRays = *(int*)numberOfRaysBuffer.getPtr();
-//    orays.resize(numberOfRays);
-//
-//    return time;
-//
-//}
+
+float RayGen::path(RayBuffer& orays, RayBuffer& irays, vks::Buffer& decreases, vks::Buffer& geometries) {
+
+    // Closest hit.
+    orays.resize(*device, queue, irays.getSize());
+    orays.setClosestHit(true);
+
+    vks::util::resizeDiscardBuffer(
+        *device,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &counterDevice,
+        sizeof(uint32_t)
+    );
+    vks::util::resizeDiscardBuffer(
+        *device,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &counterHost,
+        sizeof(uint32_t)
+    );
+
+    vks::util::clearBuffer(*device, queue, &counterDevice);
+
+    PushConstantsPath pc{};
+    pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
+    pc.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometries.buffer);
+    pc.inputRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getRayBuffer().buffer);
+    pc.outputRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
+    pc.inputIndexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getSlotToIndexBuffer().buffer);
+    pc.outputIndexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getSlotToIndexBuffer().buffer);
+    pc.inputResultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getResultBuffer().buffer);
+    pc.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
+    pc.numberOfOutputRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, counterDevice.buffer);
+    pc.numberOfInputRays = irays.getSize();
+    pc.russianRoulette = russianRoulette;
+
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsPath), &pc };
+    std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
+
+    // Launch
+    ComputePass::DispatchDesc dispatchDesc = { (irays.getSize() + workGroupSize - 1) / workGroupSize, 1, 1 };
+    float time = pathPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
+
+    device->copyBuffer(&counterDevice, &counterHost, queue);
+    counterHost.map();
+    uint32_t numberOfRays = *static_cast<uint32_t*>(counterHost.mapped);
+    counterHost.unmap();
+
+    orays.resize(*device, queue, numberOfRays);
+
+    return time;
+}
 
 bool RayGen::getRussianRoulette() {
     return russianRoulette;

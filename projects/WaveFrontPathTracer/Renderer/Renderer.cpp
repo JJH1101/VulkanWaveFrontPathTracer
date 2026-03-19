@@ -125,7 +125,7 @@ float Renderer::interpolateColors(int numberOfPixels, vks::Buffer& pixels, vks::
     return interpolateColorsPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
-float Renderer::primaryPass(vks::Buffer geometries, Camera & camera, glm::ivec2 extent, vks::Buffer & pixels) {
+float Renderer::primaryPass(vks::Buffer& geometries, Camera & camera, glm::ivec2 extent, vks::Buffer & pixels) {
     float traceTime = tracePrimaryRays(camera, extent);
     float reconstructTime = initDecreases(extent.x * extent.y);
     reconstructTime += reconstructSmooth(geometries, primaryRays, pixels);
@@ -173,22 +173,21 @@ float Renderer::shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buff
 //    aoTraceTime += traceTime;
 //    return traceTime + reconstructTime + rayHitsTime;
 //}
-//
-//float Renderer::pathPass(Scene & scene, Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays) {
-//    float traceTime = tracePathRays(scene, inRays, outRays);
-//    float reconstructTime = reconstructSmooth(scene, outRays, pixels);
-//    pathTraceTime += traceTime;
-//    numberOfPathRays += outRays.getSize();
-//    return traceTime + reconstructTime;
-//}
 
-float Renderer::renderPrimary(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
+float Renderer::pathPass(vks::Buffer& geometries, vks::Buffer& pixels, RayBuffer& inRays, RayBuffer& outRays) {
+    float traceTime = tracePathRays(geometries, inRays, outRays);
+    float reconstructTime = reconstructSmooth(geometries, outRays, pixels);
+    pathTraceTime += traceTime;
+    numberOfPathRays += outRays.getSize();
+    return traceTime + reconstructTime;
+}
+
+float Renderer::renderPrimary(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
     return primaryPass(geometries, camera, extent, pixels);
 }
 
-float Renderer::renderShadow(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
+float Renderer::renderShadow(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
     vks::util::clearBuffer(*device, queue, &auxPixels);
-
     float time = primaryPass(geometries, camera, extent, auxPixels);
     time += shadowPass(primaryRays, auxPixels, pixels, false);
     return time;
@@ -200,35 +199,35 @@ float Renderer::renderShadow(vks::Buffer geometries, Camera& camera, glm::ivec2 
 //    time += aoPass(scene, primaryRays, auxPixels, pixels, false);
 //    return time;
 //}
-//
-//float Renderer::renderPath(Scene & scene, Camera & camera, Buffer & pixels) {
-//    auxPixels.clear();
-//    float time = primaryPass(scene, camera, auxPixels);
-//    time += shadowPass(scene, primaryRays, auxPixels, pixels, false);
-//    pathQueue.init(primaryRays.getSize());
-//    for (bounce = 0; bounce < recursionDepth; ++bounce) {
-//        auxPixels.clear();
-//        if (bounce > 0)
-//            time += pathPass(
-//                scene,
-//                auxPixels,
-//                pathQueue.getInputRays(),
-//                pathQueue.getOutputRays()
-//            );
-//        else
-//            time += pathPass(
-//                scene,
-//                auxPixels,
-//                primaryRays,
-//                pathQueue.getOutputRays()
-//            );
-//        if (pathQueue.getOutputRays().getSize() == 0) break;
-//        time += shadowPass(scene, pathQueue.getOutputRays(), auxPixels, pixels, false);
-//        pathQueue.swap();
-//    }
-//    return time;
-//}
-//
+
+float Renderer::renderPath(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
+    vks::util::clearBuffer(*device, queue, &auxPixels);
+    float time = primaryPass(geometries, camera, extent, auxPixels);
+    time += shadowPass(primaryRays, auxPixels, pixels, false);
+    pathQueue.init(*device, queue, primaryRays.getSize());
+    for (bounce = 0; bounce < recursionDepth; ++bounce) {
+        vks::util::clearBuffer(*device, queue, &auxPixels);
+        if (bounce > 0)
+            time += pathPass(
+                geometries,
+                auxPixels,
+                pathQueue.getInputRays(),
+                pathQueue.getOutputRays()
+            );
+        else
+            time += pathPass(
+                geometries,
+                auxPixels,
+                primaryRays,
+                pathQueue.getOutputRays()
+            );
+        if (pathQueue.getOutputRays().getSize() == 0) break;
+        time += shadowPass(pathQueue.getOutputRays(), auxPixels, pixels, false);
+        pathQueue.swap();
+    }
+    return time;
+}
+
 //float Renderer::renderPseudocolor(Scene & scene, Camera & camera, Buffer & pixels) {
 //    float time = tracePrimaryRays(camera);
 //    time += reconstructPseudocolor(scene, pixels);
@@ -385,25 +384,11 @@ float Renderer::traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd
 //    return time;
 //}
 //
-//float Renderer::tracePathRays(Scene & scene, RayBuffer & inRays, RayBuffer & outRays) {
-//    float time = raygen.path(outRays, inRays, decreases, scene);
-//    if (sortPathRays) {
-//#if SORT_LOG
-//        float sortTime;
-//        float traceSortTime;
-//        float traceTime = tracer.trace(outRays);
-//        time += tracer.traceSort(outRays, sortTime, traceSortTime);
-//        avgRayCounts[bounce] += outRays.getSize() / getNumberOfPrimarySamples();
-//        sortTimes[bounce] += sortTime;
-//        traceSortTimes[bounce] += traceSortTime;
-//        traceTimes[bounce] += tracer.trace(outRays);
-//#else
-//        time += tracer.traceSort(outRays);
-//#endif
-//    }
-//    else time += tracer.trace(outRays);
-//    return time;
-//}
+float Renderer::tracePathRays(vks::Buffer & geometries, RayBuffer & inRays, RayBuffer & outRays) {
+    float time = raygen.path(outRays, inRays, decreases, geometries);
+    time += trace(outRays);
+    return time;
+}
 
 float Renderer::trace(RayBuffer& rays) {
     int numRays = rays.getSize();
@@ -831,7 +816,7 @@ float Renderer::render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backg
         traceTimes[i] = 0.0f;
     }
 
-    rayType = SHADOW_RAYS;
+    rayType = PATH_RAYS;
 
     // Init seeds.
     if (rayType == PATH_RAYS || rayType == SHADOW_RAYS || rayType == AO_RAYS)
@@ -845,8 +830,8 @@ float Renderer::render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backg
             time += renderShadow(geometries, camera, extent, framePixels);
         //else if (rayType == AO_RAYS)
         //    time += renderAO(scene, camera, framePixels);
-        //else if (rayType == PATH_RAYS)
-        //    time += renderPath(scene, camera, framePixels);
+        else if (rayType == PATH_RAYS)
+            time += renderPath(geometries, camera, extent, framePixels);
         //else if (rayType == PSEUDOCOLOR_RAYS)
         //    time += renderPseudocolor(scene, camera, framePixels);
         //else if (rayType == THERMAL_RAYS)

@@ -1,0 +1,169 @@
+﻿#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+
+#define THREADBLOCK_SIZE 256
+
+#include "ray.glsl"
+#include "geometrytypes.glsl"
+
+#define M_PI 3.14159265358979323846
+#define MAX_FLOAT (3.402823466e+38f)
+
+uint lcg(inout uint seed) {
+    const uint LCG_A = 1103515245u;
+    const uint LCG_C = 12345u;
+    const uint LCG_M = 0x00FFFFFFu;
+    seed = (LCG_A * seed + LCG_C);
+    return seed & LCG_M;
+}
+
+float randf(inout uint seed) {
+    return (float(lcg(seed)) / float(0x01000000));
+}
+
+// Based on Tom Duff, James Burgess, Per Christensen, Christophe Hery, Andrew Kensler, Max Liani, and
+// Ryusuke Villemin, Building an Orthonormal Basis, Revisited, Journal of Computer Graphics
+// Techniques (JCGT), vol. 6, no. 1, 1–8, 2017
+// http://jcgt.org/published/0006/01/01/
+void rightHandedBase(vec3 n, out vec3 b1, out vec3 b2) {
+    float s = (n.z >= 0.0) ? 1.0 : -1.0;
+    const float a = -1.0f / (s + n.z);
+    const float b = n.x * n.y * a;
+    b1 = vec3(1.0f + s * n.x * n.x * a, s * b, -s * n.x); // Tangent
+    b2 = vec3(b, s + n.y * n.y * a, -n.y); // Binormal
+}
+
+vec3 cosineRandomVector(float r0, float r1, vec3 normal) {
+    float theta = 2.0f * M_PI * r1;
+    float radius = sqrt(r0);
+    float x = radius * sin(theta);
+    float z = radius * cos(theta);
+    float y = sqrt(1.0f - r0);
+    vec3 u, v;
+    rightHandedBase(normal, u, v);
+    return x * u + z * v + y * normal;
+}
+
+
+layout(buffer_reference, std430) restrict buffer SeedBuffer { uint data[]; };
+layout(buffer_reference, std430) readonly restrict buffer GeometryBuffer { Geometry data[]; };
+layout(buffer_reference, std430) readonly restrict buffer InputRayBuffer { Ray data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer OutputRayBuffer { Ray data[]; };
+layout(buffer_reference, std430) readonly restrict buffer ResultBuffer { RayResult data[]; };
+layout(buffer_reference, std430) readonly restrict buffer inputIndexToPixelBuffer { int data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer outputIndexToPixelBuffer { int data[]; };
+layout(buffer_reference, std430) restrict buffer DecreaseBuffer { vec4 data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer CounterBuffer { uint data; };
+
+layout(push_constant) uniform PushConstants {
+    uint64_t seedAddr;
+    uint64_t geometryAddr;
+    uint64_t inputRayAddr;
+    uint64_t outputRayAddr;
+    uint64_t inputIndexToPixelAddr;
+    uint64_t outputIndexToPixelAddr;
+    uint64_t inputResultAddr;
+    uint64_t decreaseAddr;
+    uint64_t numberOfOutputRayAddr;
+    int numberOfInputRays;
+    int russianRoulette;
+} pc;
+
+// Generate Shadow Rays
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+
+    // Task index.
+    const uint taskIndex = gl_GlobalInvocationID.x;
+
+    // Buffer references.
+    SeedBuffer seeds = SeedBuffer(pc.seedAddr);
+    GeometryBuffer geometries = GeometryBuffer(pc.geometryAddr);
+    InputRayBuffer inputRays = InputRayBuffer(pc.inputRayAddr);
+    OutputRayBuffer outputRays = OutputRayBuffer(pc.outputRayAddr);
+    inputIndexToPixelBuffer inputIndexToPixel = inputIndexToPixelBuffer(pc.inputIndexToPixelAddr);
+    outputIndexToPixelBuffer outputIndexToPixel = outputIndexToPixelBuffer(pc.outputIndexToPixelAddr);
+    ResultBuffer inputResults = ResultBuffer(pc.inputResultAddr);
+    DecreaseBuffer decreases = DecreaseBuffer(pc.decreaseAddr);
+    CounterBuffer numberOfOutputRays = CounterBuffer(pc.numberOfOutputRayAddr);
+
+    // Only valid threads.
+    if (taskIndex < pc.numberOfInputRays) {
+
+        // Pixel.
+        const int pixel = inputIndexToPixel.data[taskIndex];
+
+        // Seed.
+        uint seed = seeds.data[taskIndex];
+
+        // Output ray.
+        Ray outputRay;
+        vec3 weight;
+        bool terminated = true;
+
+        // Input ray.
+        const Ray inputRay = inputRays.data[taskIndex];
+        const RayResult inputResult = inputResults.data[taskIndex];
+
+        // Triangle index.
+        int triangleIndex = inputResult.primitiveId;
+
+         // Process only active paths.
+        if (triangleIndex >= 0) {
+        
+            // Fetch triangle.
+            Geometry geometry = geometries.data[inputResult.geometryId];
+            Triangle tri = unpackTriangle(triangleIndex, geometry, vec2(inputResult.u, inputResult.v));
+
+            vec3 ffNormal = faceforward(tri.normal, inputRay.direction, tri.normal);
+
+            float r0 = randf(seed);
+            float r1 = randf(seed);
+
+            // Intersection point.
+            vec3 origin = inputRay.origin + inputRay.direction * inputResult.t;
+
+            // Ray offset.
+            const float EPSILON = 1.0e-4f;
+
+            // Cosine distributed ray.
+            outputRay.direction = cosineRandomVector(r0, r1, ffNormal);
+            outputRay.origin = origin + outputRay.direction * EPSILON;
+            outputRay.tmax = MAX_FLOAT;
+            weight = vec3(0.8f); // Default albedo.
+
+            // Not terminated.
+            terminated = false;
+
+            // Save seed.
+            seeds.data[taskIndex] = seed;
+        }
+
+
+        // Warp(Subgroup) wide prefix scan of active paths.
+        uvec4 ballot = subgroupBallot(!terminated);
+        uint activePathsInSubgroup = subgroupBallotBitCount(ballot);
+        uint rayOffset = subgroupBallotExclusiveBitCount(ballot);
+
+        // Add count of new tasks to the global counter.
+        uint subgroupOffset = 0;
+        if (subgroupElect()) {
+            subgroupOffset = atomicAdd(numberOfOutputRays.data, activePathsInSubgroup);
+         }
+    
+        // Exchange offset between threads.
+        const uint rayIndex = subgroupBroadcastFirst(subgroupOffset) + rayOffset;
+
+        // Write output ray
+        if (!terminated) {
+            outputRays.data[rayIndex] = outputRay;
+            outputIndexToPixel.data[rayIndex] = pixel;
+            decreases.data[pixel] *= vec4(weight, 1.0f);
+        }
+    }
+
+}

@@ -190,15 +190,15 @@ private:
     float initDecreases(int numberOfPixels);
     float interpolateColors(int numberOfPixels, vks::Buffer & pixels, vks::Buffer & framePixels);
 
-    float primaryPass(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float primaryPass(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace);
     //float aoPass(Scene & scene, RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, bool replace);
-    //float pathPass(Scene & scene, Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays);
+    float pathPass(vks::Buffer& geometries, vks::Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays);
 
-    float renderPrimary(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
-    float renderShadow(vks::Buffer geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float renderPrimary(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float renderShadow(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     //float renderAO(Scene & scene, Camera & camera, Buffer & pixels);
-    //float renderPath(Scene & scene, Camera & camera, Buffer & pixels);
+    float renderPath(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
     //float renderPseudocolor(Scene & scene, Camera & camera, Buffer & pixels);
     //float renderThermal(Camera & camera, Buffer & pixels);
 
@@ -211,7 +211,7 @@ private:
     float tracePrimaryRays(Camera & camera, glm::ivec2& extent);
     float traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd);
     //float traceAORays(Scene & scene, RayBuffer & inRays, int batchBegin, int batchEnd);
-    //float tracePathRays(Scene & scene, RayBuffer & inRays, RayBuffer & outRays);
+    float tracePathRays(vks::Buffer& geometries, RayBuffer & inRays, RayBuffer & outRays);
 
     float trace(RayBuffer& rays);
 
