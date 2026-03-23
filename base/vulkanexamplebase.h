@@ -73,7 +73,7 @@
 #include "camera.hpp"
 #include "benchmark.hpp"
 
-constexpr uint32_t maxConcurrentFrames{ 2 };
+constexpr uint32_t maxConcurrentFrames{ 3 };
 
 class VulkanExampleBase
 {

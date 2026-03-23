@@ -15,7 +15,7 @@
   */
 
 #include "RayGen.h"
-#include "../Utils/BufferUtils.hpp"
+#include "../Utils/BufferUtils.h"
 
 float RayGen::initSeeds(int numberOfPixels, int frameIndex) {
 

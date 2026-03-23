@@ -11,7 +11,7 @@
 #include "VulkanglTFModel.h"
 #include "Renderer/Renderer.h"
 #include "Utils/gpuTimer.h"
-#include "Utils/BufferUtils.hpp"
+#include "Utils/BufferUtils.h"
 
 class VulkanExample : public VulkanRaytracingSample
 {
@@ -68,6 +68,7 @@ public:
 		enabledDeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+		enabledDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 	}
 
 	~VulkanExample()
@@ -490,6 +491,10 @@ public:
 		timer.init(*vulkanDevice);
 		renderer.init(*vulkanDevice, queue, timer, topLevelAS.handle);
 
+		light = camera.viewPos;
+		glm::vec3 bgColor = glm::vec3(0.529f, 0.808f, 0.98f);
+		renderer.setScene(geometryBuffer, light, model.dimensions.min, model.dimensions.max, bgColor, topLevelAS.handle);
+
 		prepared = true;
 	}
 
@@ -500,10 +505,9 @@ public:
 		}
 
 		light = camera.viewPos;
+		renderer.setLight(light);
 
-		glm::vec3 bgColor = glm::vec3(0.529f, 0.808f, 0.98f);
-
-		return renderer.render(geometryBuffer, light, bgColor, camera, glm::ivec2(width, height), pixels, framePixels);
+		return renderer.render(camera, glm::ivec2(width, height), pixels, framePixels);
 	}
 
 	void present()

@@ -15,7 +15,7 @@
     */
 
 #include "PixelTable.h"
-#include "../Utils/BufferUtils.hpp"
+#include "../Utils/BufferUtils.h"
 #include <vector>
 
 void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue) {

@@ -29,20 +29,12 @@ private:
     vks::Buffer results;        // RayResult
     vks::Buffer indexToSlot;    // int
     vks::Buffer slotToIndex;    // int
-    vks::Buffer stats;          // glm::ivec2
-    vks::Buffer mortonCodes[2]; // uint32_t
-    vks::Buffer indices[2];     // int
+    vks::Buffer mortonCodes;    // uint32_t
+    vks::Buffer indices;        // int
     vks::Buffer spine;          // Radix sort temporary buffer
     bool closestHit;
 
-    int mortonCodeBits;
     float rayLength;
-
-    void randomSort(void);
-
-    float computeMortonCodes(vks::Buffer& mortonCodes);
-    float reorderRays(vks::Buffer& oldRayBuffer, vks::Buffer& oldIndexToPixel);
-    float mortonSort(void);
 
 public:
 
@@ -50,19 +42,19 @@ public:
     ~RayBuffer(void);
 
     int getSize(void) const;
+    int getCapacity(void) const;
     void resize(vks::VulkanDevice& device, VkQueue queue, int n);
 
     bool getClosestHit(void) const;
     void setClosestHit(bool closestHit);
-    int getMortonCodeBits(void);
-    void setMortonCodeBits(int mortonCodeBits);
     float getRayLength(void);
     void setRayLength(float rayLength);
 
     vks::Buffer& getRayBuffer(void);
     vks::Buffer& getResultBuffer(void);
-    vks::Buffer& getStatBuffer(void);
     vks::Buffer& getIndexBuffer(void);
+    vks::Buffer& getMortonCodeBuffer(void);
+    vks::Buffer& getSpineBuffer(void);
     vks::Buffer& getIndexToSlotBuffer(void);
     vks::Buffer& getSlotToIndexBuffer(void);
 

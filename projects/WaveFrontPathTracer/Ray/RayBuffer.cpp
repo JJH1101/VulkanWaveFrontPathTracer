@@ -16,28 +16,9 @@
 
 #include "RayBuffer.h"
 #include "Ray.h"
-#include "../Utils/BufferUtils.hpp"
+#include "../Utils/BufferUtils.h"
 
-void RayBuffer::randomSort() {
-    // Not implemented yet
-}
-
-float RayBuffer::computeMortonCodes(vks::Buffer & mortonCodes) {
-
-    return 0.f; // Not implemented yet
-}
-
-float RayBuffer::reorderRays(vks::Buffer& oldRayBuffer, vks::Buffer& oldIndexToPixel) {
-
-    return 0.f; // Not implemented yet
-}
-
-float RayBuffer::mortonSort() {
-
-    return 0.f; // Not implemented yet
-}
-
-RayBuffer::RayBuffer() : size(0), capacity(0), closestHit(true), mortonCodeBits(30), rayLength(0.25f) {
+RayBuffer::RayBuffer() : size(0), capacity(0), closestHit(true), rayLength(0.25f) {
 }
 
 RayBuffer::~RayBuffer() {
@@ -45,16 +26,17 @@ RayBuffer::~RayBuffer() {
     results.destroy();
     indexToSlot.destroy();
     slotToIndex.destroy();
-    stats.destroy();
-    mortonCodes[0].destroy();
-    mortonCodes[1].destroy();
-    indices[0].destroy();
-    indices[1].destroy();
+    mortonCodes.destroy();
+    indices.destroy();
     spine.destroy();
 }
 
 int RayBuffer::getSize() const {
     return size;
+}
+
+int RayBuffer::getCapacity() const {
+    return capacity;
 }
 
 void RayBuffer::resize(vks::VulkanDevice& device, VkQueue queue, int size) {
@@ -67,10 +49,9 @@ void RayBuffer::resize(vks::VulkanDevice& device, VkQueue queue, int size) {
 
         vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &rays, size * sizeof(Ray));
         vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &results, size * sizeof(RayResult));
-        vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &stats, size * sizeof(glm::ivec2));
         vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &indexToSlot, size * sizeof(int));
         vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &slotToIndex, size * sizeof(int));
-        vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &indices[0], size * sizeof(int));
+        vks::util::resizeBuffer(device, queue, usageFlags, memFlags, &indices, size * sizeof(uint32_t));
     }
     this->size = size;
 }
@@ -83,15 +64,6 @@ void RayBuffer::setClosestHit(bool closestHit) {
     this->closestHit = closestHit;
 }
 
-int RayBuffer::getMortonCodeBits() {
-    return mortonCodeBits;
-}
-
-void RayBuffer::setMortonCodeBits(int mortonCodeBits) {
-    if (mortonCodeBits < 6 || mortonCodeBits > 64) {}
-    else this->mortonCodeBits = mortonCodeBits;
-}
-
 float RayBuffer::getRayLength() {
     return rayLength;
 }
@@ -101,7 +73,6 @@ void RayBuffer::setRayLength(float rayLength) {
     else this->rayLength = rayLength;
 }
 
-
 vks::Buffer& RayBuffer::getRayBuffer() {
     return rays;
 }
@@ -109,12 +80,16 @@ vks::Buffer& RayBuffer::getResultBuffer() {
     return results;
 }
 
-vks::Buffer& RayBuffer::getStatBuffer() {
-    return stats;
+vks::Buffer& RayBuffer::getIndexBuffer() {
+    return indices;
 }
 
-vks::Buffer& RayBuffer::getIndexBuffer() {
-    return indices[0];
+vks::Buffer& RayBuffer::getMortonCodeBuffer() {
+    return mortonCodes;
+}
+
+vks::Buffer& RayBuffer::getSpineBuffer() {
+    return spine;
 }
 
 vks::Buffer& RayBuffer::getIndexToSlotBuffer() {

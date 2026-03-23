@@ -85,8 +85,6 @@ float ComputePass::launchTimed(GPUTimer& timer,
 	const std::vector<uint32_t>& dynamicOffsets,
 	const std::vector<PushConstantDesc>& pushConstantDescs)
 {
-	float time = 0.f;
-
 	VkCommandBuffer commandBuffer = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 	timer.reset(commandBuffer);
 

@@ -14,7 +14,7 @@
  */
 
 #include "Renderer.h"
-#include "../Utils/BufferUtils.hpp"
+#include "../Utils/BufferUtils.h"
 #include <bit>
 
 PathQueue::PathQueue() : swapBuffers(false) {
@@ -125,10 +125,10 @@ float Renderer::interpolateColors(int numberOfPixels, vks::Buffer& pixels, vks::
     return interpolateColorsPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
-float Renderer::primaryPass(vks::Buffer& geometries, Camera & camera, glm::ivec2 extent, vks::Buffer & pixels) {
+float Renderer::primaryPass(Camera & camera, glm::ivec2 extent, vks::Buffer & pixels) {
     float traceTime = tracePrimaryRays(camera, extent);
     float reconstructTime = initDecreases(extent.x * extent.y);
-    reconstructTime += reconstructSmooth(geometries, primaryRays, pixels);
+    reconstructTime += reconstructSmooth(primaryRays, pixels);
     numberOfPrimaryRays += (extent.x * extent.y);
     primaryTraceTime += traceTime;
     return traceTime + reconstructTime;
@@ -174,21 +174,21 @@ float Renderer::shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buff
 //    return traceTime + reconstructTime + rayHitsTime;
 //}
 
-float Renderer::pathPass(vks::Buffer& geometries, vks::Buffer& pixels, RayBuffer& inRays, RayBuffer& outRays) {
-    float traceTime = tracePathRays(geometries, inRays, outRays);
-    float reconstructTime = reconstructSmooth(geometries, outRays, pixels);
+float Renderer::pathPass(vks::Buffer& pixels, RayBuffer& inRays, RayBuffer& outRays) {
+    float traceTime = tracePathRays(inRays, outRays);
+    float reconstructTime = reconstructSmooth(outRays, pixels);
     pathTraceTime += traceTime;
     numberOfPathRays += outRays.getSize();
     return traceTime + reconstructTime;
 }
 
-float Renderer::renderPrimary(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
-    return primaryPass(geometries, camera, extent, pixels);
+float Renderer::renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
+    return primaryPass(camera, extent, pixels);
 }
 
-float Renderer::renderShadow(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
+float Renderer::renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
     vks::util::clearBuffer(*device, queue, &auxPixels);
-    float time = primaryPass(geometries, camera, extent, auxPixels);
+    float time = primaryPass(camera, extent, auxPixels);
     time += shadowPass(primaryRays, auxPixels, pixels, false);
     return time;
 }
@@ -200,23 +200,21 @@ float Renderer::renderShadow(vks::Buffer& geometries, Camera& camera, glm::ivec2
 //    return time;
 //}
 
-float Renderer::renderPath(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
+float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
     vks::util::clearBuffer(*device, queue, &auxPixels);
-    float time = primaryPass(geometries, camera, extent, auxPixels);
+    float time = primaryPass(camera, extent, auxPixels);
     time += shadowPass(primaryRays, auxPixels, pixels, false);
     pathQueue.init(*device, queue, primaryRays.getSize());
     for (bounce = 0; bounce < recursionDepth; ++bounce) {
         vks::util::clearBuffer(*device, queue, &auxPixels);
         if (bounce > 0)
             time += pathPass(
-                geometries,
                 auxPixels,
                 pathQueue.getInputRays(),
                 pathQueue.getOutputRays()
             );
         else
             time += pathPass(
-                geometries,
                 auxPixels,
                 primaryRays,
                 pathQueue.getOutputRays()
@@ -240,7 +238,7 @@ float Renderer::renderPath(vks::Buffer& geometries, Camera& camera, glm::ivec2 e
 //    return time;
 //}
 
-float Renderer::reconstructSmooth(vks::Buffer & geometies, RayBuffer & rays, vks::Buffer & pixels) {
+float Renderer::reconstructSmooth(RayBuffer & rays, vks::Buffer & pixels) {
 
     int numRays = rays.getSize();
 
@@ -250,10 +248,10 @@ float Renderer::reconstructSmooth(vks::Buffer & geometies, RayBuffer & rays, vks
     pc.idxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getSlotToIndexBuffer().buffer);
     pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
     pc.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
-    pc.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometies.buffer);
-    pc.light = light;
+    pc.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, scene.geometries.buffer);
+    pc.light = scene.light;
     pc.numberOfRays = numRays;
-    pc.backgroundColor = backgroundColor;
+    pc.backgroundColor = scene.backgroundColor;
     pc.numberOfSamples = numberOfPrimarySamples;
 
     ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsReconstructSmooth), &pc };
@@ -363,17 +361,16 @@ float Renderer::reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vk
 float Renderer::tracePrimaryRays(Camera & camera, glm::ivec2& extent) {
     float time = raygen.primary(primaryRays, camera, extent, pass + numberOfPrimarySamples * (frameIndex - 1));
 
-    time += trace(primaryRays);
+    time += tracer.trace(primaryRays);
 
     return time;
 }
 
 float Renderer::traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd) {
     float time = 0.0f;
-    time += raygen.shadow(shadowRays, inRays, batchBegin, batchEnd, numberOfShadowSamples, light, shadowRadius);
-    
-    time += trace(shadowRays);
-    
+    time += raygen.shadow(shadowRays, inRays, batchBegin, batchEnd, numberOfShadowSamples, scene.light, shadowRadius);
+    if (sortShadowRays) time += tracer.traceSort(shadowRays, scene.minPos, scene.maxPos);
+    else time += tracer.trace(shadowRays);
     return time;
 }
 //
@@ -384,30 +381,26 @@ float Renderer::traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd
 //    return time;
 //}
 //
-float Renderer::tracePathRays(vks::Buffer & geometries, RayBuffer & inRays, RayBuffer & outRays) {
-    float time = raygen.path(outRays, inRays, decreases, geometries);
-    time += trace(outRays);
+float Renderer::tracePathRays(RayBuffer & inRays, RayBuffer & outRays) {
+    float time = raygen.path(outRays, inRays, decreases, scene.geometries);
+    if (sortPathRays) {
+#if SORT_LOG
+        float sortTime;
+        float traceSortTime;
+        float traceTime = tracer.trace(outRays);
+        time += tracer.traceSort(outRays, scene.minPos, scene.maxPos, sortTime, traceSortTime);
+        avgRayCounts[bounce] += outRays.getSize() / getNumberOfPrimarySamples();
+        sortTimes[bounce] += sortTime;
+        traceSortTimes[bounce] += traceSortTime;
+        traceTimes[bounce] += tracer.trace(outRays);
+#else
+        time += tracer.traceSort(outRays, scene.minPos, scene.maxPos);
+#endif
+    }
+    else time += tracer.trace(outRays);
     return time;
 }
 
-float Renderer::trace(RayBuffer& rays) {
-    int numRays = rays.getSize();
-
-    // Set push constants
-    PushConstantsTrace pc{};
-    pc.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
-    pc.resultBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
-    pc.numRays = numRays;
-    pc.isClosestHit = rays.getClosestHit();
-
-    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsTrace), &pc };
-    std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
-    std::vector<VkDescriptorSet> descriptorSets = { descriptorSetTrace };
-
-    // Launch
-    ComputePass::DispatchDesc dispatchDesc = { (numRays + workGroupSize - 1) / workGroupSize, 1, 1 };
-    return tracePass.launchTimed(*timer, queue, dispatchDesc, descriptorSets, {}, pushConstantDescs);
-}
 
 Renderer::Renderer() :
     rayType(PRIMARY_RAYS),
@@ -430,9 +423,6 @@ Renderer::~Renderer() {
     seeds.destroy();
     counterDevice.destroy();
     counterHost.destroy();
-
-    vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayoutTrace, nullptr);
-    vkDestroyDescriptorPool(device->logicalDevice, descriptorPoolTrace, nullptr);
 }
 
 void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer, VkAccelerationStructureKHR topLevelAS) {
@@ -442,6 +432,7 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     this->queue = _queue;
 
     raygen.init(*device, *timer, queue);
+    tracer.init(*device, *timer, queue);
 
     // Create interpolateColors pipeline
     VkShaderModule shaderModule = vks::tools::loadShader((std::string(shaderPath) + "interpolateColors.comp.spv").c_str(), device->logicalDevice);
@@ -471,60 +462,6 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     pipelineContext.shaderEntry.module = shaderModule;
     pipelineContext.pushConstantRanges = { pushConstantRange };
     reconstructShadowPass.createPipeline(*device, pipelineContext);
-
-    // Create trace descriptor set
-    VkDescriptorPoolSize poolSize = { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1 };
-
-    VkDescriptorPoolCreateInfo descriptorPoolInfo{};
-    descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descriptorPoolInfo.poolSizeCount = 1;
-    descriptorPoolInfo.pPoolSizes = &poolSize;
-    descriptorPoolInfo.maxSets = 1;
-    VK_CHECK_RESULT(vkCreateDescriptorPool(device->logicalDevice, &descriptorPoolInfo, nullptr, &descriptorPoolTrace));
-
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-    binding.descriptorCount = 1;
-    binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    descriptorSetLayoutInfo.bindingCount = 1;
-    descriptorSetLayoutInfo.pBindings = &binding;
-    vkCreateDescriptorSetLayout(device->logicalDevice, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayoutTrace);
-
-    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo{};
-    descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptorSetAllocateInfo.descriptorPool = descriptorPoolTrace;
-    descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayoutTrace;
-    descriptorSetAllocateInfo.descriptorSetCount = 1;
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(device->logicalDevice, &descriptorSetAllocateInfo, &descriptorSetTrace));
-
-    // Write trace descriptor set
-    VkWriteDescriptorSetAccelerationStructureKHR descriptorAccelerationStructureInfo{};
-    descriptorAccelerationStructureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
-    descriptorAccelerationStructureInfo.accelerationStructureCount = 1;
-    descriptorAccelerationStructureInfo.pAccelerationStructures = &topLevelAS;
-
-    VkWriteDescriptorSet accelerationStructureWrite{};
-    accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    // The specialized acceleration structure descriptor has to be chained
-    accelerationStructureWrite.pNext = &descriptorAccelerationStructureInfo;
-    accelerationStructureWrite.dstSet = descriptorSetTrace;
-    accelerationStructureWrite.dstBinding = 0;
-    accelerationStructureWrite.descriptorCount = 1;
-    accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-
-    vkUpdateDescriptorSets(device->logicalDevice, 1, &accelerationStructureWrite, 0, nullptr);
-
-    // Create trace pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "trace.comp.spv").c_str(), device->logicalDevice);
-    pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsTrace) };
-    pipelineContext.shaderEntry.module = shaderModule;
-    pipelineContext.descriptorSetLayouts = { descriptorSetLayoutTrace };
-    pipelineContext.pushConstantRanges = { pushConstantRange };
-    tracePass.createPipeline(*device, pipelineContext);
 }
 
 Renderer::RayType Renderer::getRayType() {
@@ -734,32 +671,36 @@ void Renderer::setPathRayLength(float pathRayLength) {
     pathQueue.getOutputRays().setRayLength(pathRayLength);
 }
 
-int Renderer::getShadowMortonCodeBits() {
-    return shadowRays.getMortonCodeBits();
+void Renderer::setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS) {
+    setGeometries(geometries);
+    setSceneBounds(sceneMinPos, sceneMaxPos);
+    setLight(light);
+    setBackgroundColor(backgroundColor);
+    setAccelerationStructure(topLevelAS);
 }
 
-void Renderer::setShadowMortonCodeBits(int shadowMortonCodeBits) {
-    shadowRays.setMortonCodeBits(shadowMortonCodeBits);
+void Renderer::setSceneBounds(glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos) {
+    scene.minPos = sceneMinPos;
+    scene.maxPos = sceneMaxPos;
 }
 
-int Renderer::getAOMortonCodeBits() {
-    return aoRays.getMortonCodeBits();
-}
-void Renderer::setAOMortonCodeBits(int aoMortonCodeBits) {
-    aoRays.setMortonCodeBits(aoMortonCodeBits);
+void Renderer::setLight(glm::vec3& light) {
+    scene.light = light;
 }
 
-int Renderer::getPathMortonCodeBits() {
-    assert(pathQueue.getInputRays().getMortonCodeBits() == pathQueue.getOutputRays().getMortonCodeBits());
-    return pathQueue.getInputRays().getMortonCodeBits();
+void Renderer::setBackgroundColor(glm::vec3& backgroundColor) {
+    scene.backgroundColor = backgroundColor;
 }
 
-void Renderer::setPathMortonCodeBits(int pathMortonCodeBits) {
-    pathQueue.getInputRays().setMortonCodeBits(pathMortonCodeBits);
-    pathQueue.getOutputRays().setMortonCodeBits(pathMortonCodeBits);
+void Renderer::setGeometries(vks::Buffer& geometries) {
+    scene.geometries = geometries;
 }
 
-float Renderer::render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
+void Renderer::setAccelerationStructure(VkAccelerationStructureKHR topLevelAS) {
+    tracer.setAccererationStructure(topLevelAS);
+}
+
+float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
 
     // Elapsed time.
     float time = 0.0f;
@@ -804,10 +745,6 @@ float Renderer::render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backg
     numberOfAORays = 0;
     numberOfPathRays = 0;
 
-    // Set light.
-    this->light = light;
-    this->backgroundColor = backgroundColor;
-
     // Clear sort counts.
     for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
         avgRayCounts[i] = 0;
@@ -817,6 +754,8 @@ float Renderer::render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backg
     }
 
     rayType = PATH_RAYS;
+    sortShadowRays = true;
+    sortPathRays = true;
 
     // Init seeds.
     if (rayType == PATH_RAYS || rayType == SHADOW_RAYS || rayType == AO_RAYS)
@@ -825,13 +764,13 @@ float Renderer::render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backg
     // For-each primary ray.
     for (pass = 0; pass < numberOfPrimarySamples; ++pass) {
         if (rayType == PRIMARY_RAYS)
-            time += renderPrimary(geometries, camera, extent, framePixels);
+            time += renderPrimary(camera, extent, framePixels);
         else if (rayType == SHADOW_RAYS)
-            time += renderShadow(geometries, camera, extent, framePixels);
+            time += renderShadow(camera, extent, framePixels);
         //else if (rayType == AO_RAYS)
         //    time += renderAO(scene, camera, framePixels);
         else if (rayType == PATH_RAYS)
-            time += renderPath(geometries, camera, extent, framePixels);
+            time += renderPath(camera, extent, framePixels);
         //else if (rayType == PSEUDOCOLOR_RAYS)
         //    time += renderPseudocolor(scene, camera, framePixels);
         //else if (rayType == THERMAL_RAYS)

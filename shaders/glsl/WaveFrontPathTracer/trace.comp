@@ -3,13 +3,13 @@
 #extension GL_EXT_ray_query : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-#extension GL_EXT_scalar_block_layout : require
 
 #define THREADBLOCK_SIZE 256
 
 #include "ray.glsl"
 
 layout(buffer_reference, std430) readonly restrict buffer RayBuffer { Ray data[]; };
+layout(buffer_reference, std430) readonly restrict buffer IndexBuffer { uint data[]; };
 layout(buffer_reference, std430) writeonly restrict buffer RayResultBuffer { RayResult data[]; };
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
@@ -17,6 +17,7 @@ layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 layout(push_constant) uniform PushConstants {
     uint64_t rayBufferAddr;     
     uint64_t resultBufferAddr;  
+    uint64_t rayIndexBufferAddr;
     uint     numRays;
     uint     isClosestHit;
 } pc;
@@ -38,8 +39,14 @@ void main() {
     // Only valid threads.
     if (taskIndex < pc.numRays) {
         
+        // Ray index.
+        uint rayIndex = taskIndex;
+        if(pc.rayIndexBufferAddr != 0) {
+            rayIndex = IndexBuffer(pc.rayIndexBufferAddr).data[taskIndex];
+        }
+
         // Input ray.
-        Ray ray = rays.data[taskIndex];
+        Ray ray = rays.data[rayIndex];
 
         // Init ray query
         rayQueryEXT rq;
@@ -85,7 +92,7 @@ void main() {
             result.v = 0.0;
         }
         
-        results.data[taskIndex] = result;
+        results.data[rayIndex] = result;
 
     }
 

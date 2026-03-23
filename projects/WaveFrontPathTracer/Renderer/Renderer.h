@@ -17,6 +17,7 @@
 
 #include "camera.hpp"
 #include "../Ray/RayGen.h"
+#include "../Tracer/Tracer.h"
 
 #define RENDERER_MAX_KEY_VALUE 2.0f
 #define RENDERER_MAX_WHITE_POINT 2.0f
@@ -79,7 +80,6 @@ private:
     ComputePass interpolateColorsPass;
     ComputePass reconstructSmoothPass;
     ComputePass reconstructShadowPass;
-    ComputePass tracePass;
 
     struct PushConstantsCountRayHits {
         uint64_t rayResultAddr;
@@ -122,18 +122,16 @@ private:
         int replace;
     };
 
-    struct PushConstantsTrace {
-        uint64_t rayBufferAddr;
-        uint64_t resultBufferAddr;
-        uint32_t numRays;
-        uint32_t isClosestHit;
-    };
-
-    VkDescriptorPool descriptorPoolTrace{ VK_NULL_HANDLE };
-    VkDescriptorSetLayout descriptorSetLayoutTrace{ VK_NULL_HANDLE };
-    VkDescriptorSet descriptorSetTrace{ VK_NULL_HANDLE };
+    struct Scene {
+        vks::Buffer geometries; // Destroyed outside of renderer class
+        glm::vec3 minPos{};
+        glm::vec3 maxPos{};
+        glm::vec3 backgroundColor{};
+        glm::vec3 light{};
+    } scene;
 
     RayGen raygen;
+    Tracer tracer;
 
     RayType rayType;
     float keyValue;
@@ -181,28 +179,25 @@ private:
     vks::Buffer counterDevice;
     vks::Buffer counterHost;
 
-    glm::vec3 backgroundColor{};
-    glm::vec3 light{};
-
     RayType stringToRayType(const std::string & rayType);
 
     float computeRayHits(RayBuffer & rays);
     float initDecreases(int numberOfPixels);
     float interpolateColors(int numberOfPixels, vks::Buffer & pixels, vks::Buffer & framePixels);
 
-    float primaryPass(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float primaryPass(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace);
     //float aoPass(Scene & scene, RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, bool replace);
-    float pathPass(vks::Buffer& geometries, vks::Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays);
+    float pathPass(vks::Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays);
 
-    float renderPrimary(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
-    float renderShadow(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     //float renderAO(Scene & scene, Camera & camera, Buffer & pixels);
-    float renderPath(vks::Buffer& geometries, Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
+    float renderPath(Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
     //float renderPseudocolor(Scene & scene, Camera & camera, Buffer & pixels);
     //float renderThermal(Camera & camera, Buffer & pixels);
 
-    float reconstructSmooth(vks::Buffer& geometies, RayBuffer& rays, vks::Buffer& pixels);
+    float reconstructSmooth(RayBuffer& rays, vks::Buffer& pixels);
     //float reconstructPseudocolor(Scene & scene, Buffer & pixels);
     //float reconstructThermal(Buffer & pixels);
     float reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, int batchBegin, int batchEnd, bool replace);
@@ -211,9 +206,7 @@ private:
     float tracePrimaryRays(Camera & camera, glm::ivec2& extent);
     float traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd);
     //float traceAORays(Scene & scene, RayBuffer & inRays, int batchBegin, int batchEnd);
-    float tracePathRays(vks::Buffer& geometries, RayBuffer & inRays, RayBuffer & outRays);
-
-    float trace(RayBuffer& rays);
+    float tracePathRays(RayBuffer & inRays, RayBuffer & outRays);
 
 public:
 
@@ -261,14 +254,14 @@ public:
     float getPathRayLength(void);
     void setPathRayLength(float pathRayLength);
 
-    int getShadowMortonCodeBits(void);
-    void setShadowMortonCodeBits(int shadowMortonCodeBits);
-    int getAOMortonCodeBits(void);
-    void setAOMortonCodeBits(int aoMortonCodeBits);
-    int getPathMortonCodeBits(void);
-    void setPathMortonCodeBits(int pathMortonCodeBits);
+    void setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS);
+    void setSceneBounds(glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos);
+    void setLight(glm::vec3& light);
+    void setBackgroundColor(glm::vec3& backgroundColor);
+    void setGeometries(vks::Buffer& geometries);
+    void setAccelerationStructure(VkAccelerationStructureKHR topLevelAS);
 
-    float render(vks::Buffer& geometries, glm::vec3 light, glm::vec3 backgroundColor, Camera & camera, glm::ivec2 extent, vks::Buffer & pixels, vks::Buffer & framePixels);
+    float render(Camera & camera, glm::ivec2 extent, vks::Buffer & pixels, vks::Buffer & framePixels);
 
     void resetFrameIndex(void);
 

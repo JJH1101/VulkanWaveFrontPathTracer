@@ -1,11 +1,10 @@
 #pragma once
 
-#include "VulkanDevice.h"
-#include "GPUTimer.h"
+#include "BufferUtils.h"
 
 namespace vks::util {
 	
-	void inline resizeBuffer(vks::VulkanDevice& device, VkQueue queue, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, vks::Buffer* buffer, VkDeviceSize size) {
+	void resizeBuffer(vks::VulkanDevice& device, VkQueue queue, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, vks::Buffer* buffer, VkDeviceSize size) {
 		if (buffer->size == size) return;
 
 		usageFlags |= (VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
@@ -36,7 +35,7 @@ namespace vks::util {
 		oldBuffer.destroy();
 	}
 	
-	void inline resizeDiscardBuffer(vks::VulkanDevice& device, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, vks::Buffer* buffer, VkDeviceSize size) {
+	void resizeDiscardBuffer(vks::VulkanDevice& device, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, vks::Buffer* buffer, VkDeviceSize size) {
 		if (buffer->size != size) {
 			buffer->destroy();
 
@@ -44,7 +43,7 @@ namespace vks::util {
 		}
 	}
 
-	void inline clearBuffer(vks::VulkanDevice& device, VkQueue queue, vks::Buffer* buffer, uint32_t value = 0, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) {
+	void clearBuffer(vks::VulkanDevice& device, VkQueue queue, vks::Buffer* buffer, uint32_t value, VkDeviceSize offset, VkDeviceSize size) {
 		VkCommandBuffer commandBuffer = device.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
 		vkCmdFillBuffer(commandBuffer, buffer->buffer, offset, size, value);
@@ -52,7 +51,7 @@ namespace vks::util {
 		device.flushCommandBuffer(commandBuffer, queue);
 	}
 
-	float inline clearBufferTimed(GPUTimer& timer, vks::VulkanDevice& device, VkQueue queue, vks::Buffer* buffer, uint32_t value = 0, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) {
+	float clearBufferTimed(GPUTimer& timer, vks::VulkanDevice& device, VkQueue queue, vks::Buffer* buffer, uint32_t value, VkDeviceSize offset, VkDeviceSize size) {
 		VkCommandBuffer commandBuffer = device.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 		timer.reset(commandBuffer);
 
@@ -69,7 +68,7 @@ namespace vks::util {
 		return timerResults[0];
 	}
 
-	uint64_t inline getBufferDeviceAddress(VkDevice device, VkBuffer buffer) {
+	uint64_t getBufferDeviceAddress(VkDevice device, VkBuffer buffer) {
 		VkBufferDeviceAddressInfo bufferDeviceAddressInfo{};
 		bufferDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 		bufferDeviceAddressInfo.buffer = buffer;
