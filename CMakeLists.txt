@@ -141,16 +141,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB SOURCE *.cpp )
 
-# Asset and shader path selection
+# Asset, shader, environment path selection
 if(RESOURCE_INSTALL_DIR)
 	add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${RESOURCE_INSTALL_DIR}/\")
 	add_definitions(-DVK_EXAMPLE_SHADERS_DIR=\"${RESOURCE_INSTALL_DIR}/shaders/\")
+	add_definitions(-DVK_EXAMPLE_ENVIRONMENTS_DIR=\"${RESOURCE_INSTALL_DIR}/env/\")
 	install(DIRECTORY assets/ DESTINATION ${RESOURCE_INSTALL_DIR}/)
 	install(DIRECTORY shaders/ DESTINATION ${RESOURCE_INSTALL_DIR}/shaders/)
+	install(DIRECTORY env/ DESTINATION ${RESOURCE_INSTALL_DIR}/env/)
 else()
 	if(NOT USE_RELATIVE_ASSET_PATH)
 		add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${CMAKE_SOURCE_DIR}/assets/\")
 		add_definitions(-DVK_EXAMPLE_SHADERS_DIR=\"${CMAKE_SOURCE_DIR}/shaders/\")
+		add_definitions(-DVK_EXAMPLE_ENVIRONMENTS_DIR=\"${CMAKE_SOURCE_DIR}/env/\")
 	endif()
 endif()
 

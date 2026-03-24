@@ -62,6 +62,7 @@
 
 const std::string getAssetPath();
 const std::string getShaderBasePath();
+const std::string getEnvPath();
 
 namespace vks
 {

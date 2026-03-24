@@ -26,7 +26,7 @@
 #define RENDERER_MAX_BATCH_SIZE (8 * 1024 * 1024)
 #define RENDERER_MAX_RECURSION_DEPTH 8
 
-#define SORT_LOG 1
+#define SORT_LOG 0
 
 class PathQueue {
 
@@ -54,12 +54,8 @@ public:
 
     enum RayType {
         PRIMARY_RAYS,
-        WHITTED_RAYS,
         SHADOW_RAYS,
-        AO_RAYS,
         PATH_RAYS,
-        PSEUDOCOLOR_RAYS,
-        THERMAL_RAYS,
         MAX_RAYS
     };
 
@@ -136,19 +132,14 @@ private:
     RayType rayType;
     float keyValue;
     float whitePoint;
-    float aoRadius;
     float shadowRadius;
     int numberOfPrimarySamples;
-    int numberOfAOSamples;
     int numberOfShadowSamples;
     int recursionDepth;
-    int nodeSizeThreshold;
-    int thermalThreshold;
     int numberOfHits;
 
-    bool sortShadowRays;
-    bool sortAORays;
-    bool sortPathRays;
+    bool sortShadowRays = false;
+    bool sortPathRays = false;
 
     int avgRayCounts[RENDERER_MAX_RECURSION_DEPTH];
     float sortTimes[RENDERER_MAX_RECURSION_DEPTH];
@@ -161,17 +152,14 @@ private:
 
     unsigned long long numberOfPrimaryRays = 0;
     unsigned long long numberOfShadowRays = 0;
-    unsigned long long numberOfAORays = 0;
     unsigned long long numberOfPathRays = 0;
 
     float primaryTraceTime = 0.f;
     float shadowTraceTime = 0.f;
-    float aoTraceTime = 0.f;
     float pathTraceTime = 0.f;
 
     PathQueue pathQueue;
     RayBuffer primaryRays;
-    RayBuffer aoRays;
     RayBuffer shadowRays;
     vks::Buffer auxPixels;
     vks::Buffer decreases;
@@ -187,25 +175,17 @@ private:
 
     float primaryPass(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace);
-    //float aoPass(Scene & scene, RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, bool replace);
     float pathPass(vks::Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays);
 
     float renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
-    //float renderAO(Scene & scene, Camera & camera, Buffer & pixels);
     float renderPath(Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
-    //float renderPseudocolor(Scene & scene, Camera & camera, Buffer & pixels);
-    //float renderThermal(Camera & camera, Buffer & pixels);
 
     float reconstructSmooth(RayBuffer& rays, vks::Buffer& pixels);
-    //float reconstructPseudocolor(Scene & scene, Buffer & pixels);
-    //float reconstructThermal(Buffer & pixels);
     float reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, int batchBegin, int batchEnd, bool replace);
-    //float reconstructAO(RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, int batchBegin, int batchEnd, bool replace);
 
     float tracePrimaryRays(Camera & camera, glm::ivec2& extent);
     float traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd);
-    //float traceAORays(Scene & scene, RayBuffer & inRays, int batchBegin, int batchEnd);
     float tracePathRays(RayBuffer & inRays, RayBuffer & outRays);
 
 public:
@@ -227,32 +207,17 @@ public:
     void setShadowRadius(float shadowRadius);
     int getNumberOfPrimarySamples(void);
     void setNumberOfPrimarySamples(int numberOfPrimarySamples);
-    int getNumberOfAOSamples(void);
-    void setNumberOfAOSamples(int numberOfAOSamples);
     int getNumberOfShadowSamples(void);
     void setNumberOfShadowSamples(int numberOfShadowSamples);
     int getRecursionDepth(void);
     void setRecursionDepth(int recursionDepth);
-    int getNodeSizeThreshold(void);
-    void setNodeSizeThreshold(int nodeSizeThreshold);
-    int getThermalThreshold(void);
-    void setThermalThreshold(int thermalThreshold);
     bool getRussianRoulette(void);
     void setRussianRoulette(bool russianRoulette);
 
     bool getSortShadowRays(void);
     void setSortShadowRays(bool sortShadowRays);
-    bool getSortAORays(void);
-    void setSortAORays(bool sortAORays);
     bool getSortPathRays(void);
     void setSortPathRays(bool sortPathRays);
-
-    float getShadowRayLength(void);
-    void setShadowRayLength(float shadowRayLength);
-    float getAORayLength(void);
-    void setAORayLength(float aoRayLength);
-    float getPathRayLength(void);
-    void setPathRayLength(float pathRayLength);
 
     void setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS);
     void setSceneBounds(glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos);
@@ -267,19 +232,16 @@ public:
 
     unsigned long long getNumberOfPrimaryRays(void);
     unsigned long long getNumberOfShadowRays(void);
-    unsigned long long getNumberOfAORays(void);
     unsigned long long getNumberOfPathRays(void);
     unsigned long long getNumberOfRays(void);
 
     float getPrimaryTraceTime(void);
     float getShadowTraceTime(void);
-    float getAOTraceTime(void);
     float getPathTraceTime(void);
     float getTraceTime(void);
 
     float getPrimaryTracePerformance(void);
     float getShadowTracePerformance(void);
-    float getAOTracePerformance(void);
     float getPathTracePerformance(void);
     float getTracePerformance(void);
 

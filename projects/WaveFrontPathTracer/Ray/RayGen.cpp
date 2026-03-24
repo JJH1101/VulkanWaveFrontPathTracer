@@ -16,6 +16,7 @@
 
 #include "RayGen.h"
 #include "../Utils/BufferUtils.h"
+#include "../Environment/Environment.h"
 
 float RayGen::initSeeds(int numberOfPixels, int frameIndex) {
 
@@ -76,6 +77,8 @@ void RayGen::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     pipelineContext.shaderEntry.module = shaderModule;
     pipelineContext.pushConstantRanges = { pushConstantRange };
     pathPass.createPipeline(*device, pipelineContext);
+
+    Environment::getInstance()->getBoolValue("Renderer.russianRoulette", russianRoulette);
 }
 
 float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, int sampleIndex) {

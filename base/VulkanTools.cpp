@@ -37,6 +37,21 @@ if (vks::tools::resourcePath != "") {
 	return "./../shaders/";
 #endif
 }
+
+const std::string getEnvPath()
+{
+	if (vks::tools::resourcePath != "") {
+		return vks::tools::resourcePath + "/env/";
+	}
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+	return "shaders/";
+#elif defined(VK_EXAMPLE_ENVIRONMENTS_DIR)
+	return VK_EXAMPLE_ENVIRONMENTS_DIR;
+#else
+	return "./../env/";
+#endif
+}
+
 #endif
 
 namespace vks

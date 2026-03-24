@@ -12,12 +12,14 @@
 #include "Renderer/Renderer.h"
 #include "Utils/gpuTimer.h"
 #include "Utils/BufferUtils.h"
+#include "Environment/AppEnvironment.h"
 
 class VulkanExample : public VulkanRaytracingSample
 {
 public:
 
 	glm::vec3 light = glm::vec3(0.f);
+	glm::vec3 backgroundColor = glm::vec3(0.f);
 	float lightRadius = 0.f;
 
 	AccelerationStructure bottomLevelAS{};
@@ -56,12 +58,6 @@ public:
 	VulkanExample() : VulkanRaytracingSample()
 	{
 		title = "Wavefront Path Tracing";
-		camera.type = Camera::CameraType::firstperson;
-		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 512.0f);
-		//camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
-		//camera.setTranslation(glm::vec3(0.0f, -5.f, -3.0f));
-		camera.setTranslation(glm::vec3(-9.532621, 5.238951, 0.979480));
-		camera.setRotation(glm::vec3(-11.349973, 279.949829, 0.000000));
 
 		enableExtensions();
 
@@ -69,6 +65,30 @@ public:
 		enabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+
+		Environment* env = new AppEnvironment();
+		Environment::setInstance(env);
+
+		env->readEnvFile(getEnvPath() + "env.json");
+
+		int w, h;
+		env->getIntValue("Resolution.width", w);
+		env->getIntValue("Resolution.height", h);
+		width = w;
+		height = h;
+
+		glm::vec3 cameraPos, cameraRot;
+		float nearPlane, farPlane, fov;
+		env->getVectorValue("Camera.position", cameraPos);
+		env->getVectorValue("Camera.rotation", cameraRot);
+		env->getFloatValue("Camera.nearPlane", nearPlane);
+		env->getFloatValue("Camera.farPlane", farPlane);
+		env->getFloatValue("Camera.fieldOfView", fov);
+
+		camera.type = Camera::CameraType::firstperson;
+		camera.setPerspective(fov, (float)width / (float)height, nearPlane, farPlane);
+		camera.setTranslation(cameraPos);
+		camera.setRotation(cameraRot);
 	}
 
 	~VulkanExample()
@@ -474,7 +494,12 @@ public:
 	{
 		vkglTF::memoryPropertyFlags = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 		//model.loadFromFile(getAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf", vulkanDevice, queue);
-		model.loadFromFile(getAssetPath() + "models/Sponza_geometry/Sponza_geometry.gltf", vulkanDevice, queue);
+		std::string sceneFile;
+		Environment::getInstance()->getStringValue("Scene.filename", sceneFile);
+		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue);
+
+		Environment::getInstance()->getVectorValue("Scene.light", light);
+		Environment::getInstance()->getVectorValue("Scene.backgroundColor", backgroundColor);
 	}
 
 	void prepare()

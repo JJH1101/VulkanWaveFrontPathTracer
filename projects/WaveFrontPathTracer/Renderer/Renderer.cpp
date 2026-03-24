@@ -15,6 +15,7 @@
 
 #include "Renderer.h"
 #include "../Utils/BufferUtils.h"
+#include "../Environment/Environment.h"
 #include <bit>
 
 PathQueue::PathQueue() : swapBuffers(false) {
@@ -41,18 +42,12 @@ RayBuffer & PathQueue::getOutputRays() {
 }
 
 Renderer::RayType Renderer::stringToRayType(const std::string & rayType) {
-    if (rayType == "primary")
-        return PRIMARY_RAYS;
-    else if (rayType == "shadow")
+    if (rayType == "shadow")
         return SHADOW_RAYS;
-    else if (rayType == "ao")
-        return AO_RAYS;
     else if (rayType == "path")
         return PATH_RAYS;
-    else if (rayType == "pseudocolor")
-        return PSEUDOCOLOR_RAYS;
     else
-        return THERMAL_RAYS;
+        return PRIMARY_RAYS;
 }
 
 float Renderer::computeRayHits(RayBuffer& rays) {
@@ -154,26 +149,6 @@ float Renderer::shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buff
     return traceTime + reconstructTime + rayHitsTime;
 }
 
-//float Renderer::aoPass(Scene & scene, RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, bool replace) {
-//    float traceTime = 0.0f;
-//    float reconstructTime = 0.0f;
-//    int batchDiff = RENDERER_MAX_BATCH_SIZE / numberOfAOSamples;
-//    int batchIndex = 0;
-//    int batchBegin;
-//    int batchEnd;
-//    do {
-//        batchBegin = batchIndex;
-//        batchEnd = qMin(batchBegin + batchDiff, inRays.getSize());
-//        traceTime += traceAORays(scene, inRays, batchBegin, batchEnd);
-//        reconstructTime += reconstructAO(inRays, inPixels, outPixels, batchBegin, batchEnd, replace);
-//        batchIndex = batchEnd;
-//    } while (batchIndex != inRays.getSize());
-//    float rayHitsTime = computeRayHits(inRays);
-//    numberOfAORays += numberOfAOSamples * numberOfHits;
-//    aoTraceTime += traceTime;
-//    return traceTime + reconstructTime + rayHitsTime;
-//}
-
 float Renderer::pathPass(vks::Buffer& pixels, RayBuffer& inRays, RayBuffer& outRays) {
     float traceTime = tracePathRays(inRays, outRays);
     float reconstructTime = reconstructSmooth(outRays, pixels);
@@ -192,13 +167,6 @@ float Renderer::renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pix
     time += shadowPass(primaryRays, auxPixels, pixels, false);
     return time;
 }
-
-//float Renderer::renderAO(Scene & scene, Camera & camera, Buffer & pixels) {
-//    auxPixels.clear();
-//    float time = primaryPass(scene, camera, auxPixels);
-//    time += aoPass(scene, primaryRays, auxPixels, pixels, false);
-//    return time;
-//}
 
 float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
     vks::util::clearBuffer(*device, queue, &auxPixels);
@@ -226,18 +194,6 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
     return time;
 }
 
-//float Renderer::renderPseudocolor(Scene & scene, Camera & camera, Buffer & pixels) {
-//    float time = tracePrimaryRays(camera);
-//    time += reconstructPseudocolor(scene, pixels);
-//    return time;
-//}
-//
-//float Renderer::renderThermal(Camera & camera, Buffer & pixels) {
-//    float time = tracePrimaryRays(camera);
-//    time += reconstructThermal(pixels);
-//    return time;
-//}
-
 float Renderer::reconstructSmooth(RayBuffer & rays, vks::Buffer & pixels) {
 
     int numRays = rays.getSize();
@@ -262,56 +218,6 @@ float Renderer::reconstructSmooth(RayBuffer & rays, vks::Buffer & pixels) {
     return reconstructSmoothPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
-//float Renderer::reconstructPseudocolor(Scene & scene, Buffer & pixels) {
-//
-//    // Colorize scene.
-//    tracer.getBVH()->colorizeScene(nodeSizeThreshold);
-//
-//    // Kernel.
-//    HipModule * module = compiler.compile();
-//    HipKernel kernel = module->getKernel("reconstructPseudocolor");
-//
-//    // Set params.
-//    kernel.setParams(
-//        primaryRays.getSize(),
-//        numberOfPrimarySamples,
-//        scene.getMatIndexBuffer(),
-//        scene.getTriangleBuffer(),
-//        scene.getNormalBuffer(),
-//        scene.getPseudocolorBuffer(),
-//        primaryRays.getRayBuffer(),
-//        primaryRays.getResultBuffer(),
-//        scene.getLight(),
-//        primaryRays.getSlotToIndexBuffer(),
-//        pixels
-//    );
-//
-//    // Launch.
-//    return kernel.launchTimed(primaryRays.getSize());
-//
-//}
-//
-//float Renderer::reconstructThermal(Buffer & pixels) {
-//
-//    // Kernel.
-//    HipModule * module = compiler.compile();
-//    HipKernel kernel = module->getKernel("reconstructThermal");
-//
-//    // Set params.
-//    kernel.setParams(
-//        primaryRays.getSize(),
-//        numberOfPrimarySamples,
-//        thermalThreshold,
-//        primaryRays.getSlotToIndexBuffer(),
-//        primaryRays.getStatBuffer(),
-//        pixels
-//    );
-//
-//    // Launch.
-//    return kernel.launchTimed(primaryRays.getSize());
-//
-//}
-//
 float Renderer::reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, int batchBegin, int batchEnd, bool replace) {
 
     PushConstantsReconstructShadow pc{};
@@ -333,30 +239,6 @@ float Renderer::reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vk
     return reconstructShadowPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 
 }
-//
-//float Renderer::reconstructAO(RayBuffer & inRays, Buffer & inPixels, Buffer & outPixels, int batchBegin, int batchEnd, bool replace) {
-//
-//    // Kernel.
-//    HipModule * module = compiler.compile();
-//    HipKernel kernel = module->getKernel("reconstructAO");
-//
-//    // Set params.
-//    kernel.setParams(
-//        batchBegin,
-//        batchEnd - batchBegin,
-//        numberOfAOSamples,
-//        replace,
-//        aoRays.getResultBuffer(),
-//        inRays.getSlotToIndexBuffer(),
-//        aoRays.getIndexToSlotBuffer(),
-//        inPixels,
-//        outPixels
-//    );
-//
-//    // Launch.
-//    return kernel.launchTimed(batchEnd - batchBegin);
-//
-//}
 
 float Renderer::tracePrimaryRays(Camera & camera, glm::ivec2& extent) {
     float time = raygen.primary(primaryRays, camera, extent, pass + numberOfPrimarySamples * (frameIndex - 1));
@@ -373,14 +255,7 @@ float Renderer::traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd
     else time += tracer.trace(shadowRays);
     return time;
 }
-//
-//float Renderer::traceAORays(Scene & scene, RayBuffer & inRays, int batchBegin, int batchEnd) {
-//    float time = raygen.ao(aoRays, inRays, scene, batchBegin, batchEnd, numberOfAOSamples, aoRadius);
-//    if (sortAORays) time += tracer.traceSort(aoRays);
-//    else time += tracer.trace(aoRays);
-//    return time;
-//}
-//
+
 float Renderer::tracePathRays(RayBuffer & inRays, RayBuffer & outRays) {
     float time = raygen.path(outRays, inRays, decreases, scene.geometries);
     if (sortPathRays) {
@@ -392,7 +267,7 @@ float Renderer::tracePathRays(RayBuffer & inRays, RayBuffer & outRays) {
         avgRayCounts[bounce] += outRays.getSize() / getNumberOfPrimarySamples();
         sortTimes[bounce] += sortTime;
         traceSortTimes[bounce] += traceSortTime;
-        traceTimes[bounce] += tracer.trace(outRays);
+        traceTimes[bounce] += traceTime;
 #else
         time += tracer.traceSort(outRays, scene.minPos, scene.maxPos);
 #endif
@@ -406,15 +281,11 @@ Renderer::Renderer() :
     rayType(PRIMARY_RAYS),
     keyValue(0.4f),
     whitePoint(1.0f),
-    aoRadius(0.5f),
     shadowRadius(1.0f),
     numberOfPrimarySamples(1),
-    numberOfAOSamples(4),
     numberOfShadowSamples(4),
     recursionDepth(3),
-    frameIndex(1),
-    nodeSizeThreshold(5000),
-    thermalThreshold(200) {
+    frameIndex(1) {
 }
 
 Renderer::~Renderer() {
@@ -462,6 +333,32 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     pipelineContext.shaderEntry.module = shaderModule;
     pipelineContext.pushConstantRanges = { pushConstantRange };
     reconstructShadowPass.createPipeline(*device, pipelineContext);
+
+    std::string _rayType;
+    Environment::getInstance()->getStringValue("Renderer.rayType", _rayType);
+    setRayType(stringToRayType(_rayType));
+
+    float _keyValue;
+    Environment::getInstance()->getFloatValue("Renderer.keyValue", _keyValue);
+    setKeyValue(_keyValue);
+    float _whitePoint;
+    Environment::getInstance()->getFloatValue("Renderer.whitePoint", _whitePoint);
+    setWhitePoint(_whitePoint);
+    int _numberOfPrimarySamples;
+    Environment::getInstance()->getIntValue("Renderer.numberOfPrimarySamples", _numberOfPrimarySamples);
+    setNumberOfPrimarySamples(_numberOfPrimarySamples);
+    int _numberOfShadowSamples;
+    Environment::getInstance()->getIntValue("Renderer.numberOfShadowSamples", _numberOfShadowSamples);
+    setNumberOfShadowSamples(_numberOfShadowSamples);
+    float _shadowRadius;
+    Environment::getInstance()->getFloatValue("Renderer.shadowRadius", _shadowRadius);
+    setShadowRadius(_shadowRadius);
+    int _recursionDepth;
+    Environment::getInstance()->getIntValue("Renderer.recursionDepth", _recursionDepth);
+    setRecursionDepth(_recursionDepth);
+
+    Environment::getInstance()->getBoolValue("Renderer.sortShadowRays", sortShadowRays);
+    Environment::getInstance()->getBoolValue("Renderer.sortPathRays", sortPathRays);
 }
 
 Renderer::RayType Renderer::getRayType() {
@@ -501,20 +398,6 @@ void Renderer::setRayType(RayType rayType) {
     this->rayType = rayType;
 }
 
-float Renderer::getAORadius() {
-    return aoRadius;
-}
-
-void Renderer::setAORadius(float aoRadius) {
-    if (aoRadius <= 0 || aoRadius > RENDERER_MAX_RADIUS) {
-        std::cout << "WARN <Renderer> AO radius must be in range (0," << RENDERER_MAX_RADIUS << "].\n";
-    }
-    else {
-        this->aoRadius = aoRadius;
-        resetFrameIndex();
-    }
-}
-
 float Renderer::getShadowRadius() {
     return shadowRadius;
 }
@@ -538,20 +421,6 @@ void Renderer::setNumberOfPrimarySamples(int numberOfPrimarySamples) {
     }
     else {
         this->numberOfPrimarySamples = numberOfPrimarySamples;
-        resetFrameIndex();
-    }
-}
-
-int Renderer::getNumberOfAOSamples() {
-    return numberOfAOSamples;
-}
-
-void Renderer::setNumberOfAOSamples(int numberOfAOSamples) {
-    if (numberOfAOSamples <= 0 || numberOfAOSamples > RENDERER_MAX_SAMPLES) {
-        std::cout << "WARN <Renderer> Number of AO samples must be in range (0," << RENDERER_MAX_SAMPLES << "].\n";
-    }
-    else {
-        this->numberOfAOSamples = numberOfAOSamples;
         resetFrameIndex();
     }
 }
@@ -584,33 +453,6 @@ void Renderer::setRecursionDepth(int recursionDepth) {
     }
 }
 
-int Renderer::getNodeSizeThreshold() {
-    return nodeSizeThreshold;
-}
-
-void Renderer::setNodeSizeThreshold(int nodeSizeThreshold) {
-    if (nodeSizeThreshold <= 0) {
-        std::cout << "WARN <Renderer> Node size threshold must be positive.\n";
-    }
-    else {
-        this->nodeSizeThreshold = nodeSizeThreshold;
-        resetFrameIndex();
-    }
-}
-
-int Renderer::getThermalThreshold() {
-    return thermalThreshold;
-}
-
-void Renderer::setThermalThreshold(int thermalThreshold) {
-    if (thermalThreshold <= 0) {
-        std::cout << "WARN <Renderer> Thermal threshold must be positive.\n";
-    }
-    else {
-        this->thermalThreshold = thermalThreshold;
-        resetFrameIndex();
-    }
-}
 
 bool Renderer::getRussianRoulette() {
     return raygen.getRussianRoulette();
@@ -628,47 +470,12 @@ void Renderer::setSortShadowRays(bool sortShadowRays) {
     this->sortShadowRays = sortShadowRays;
 }
 
-bool Renderer::getSortAORays() {
-    return sortAORays;
-}
-
-void Renderer::setSortAORays(bool sortAORays) {
-    this->sortAORays = sortAORays;
-}
-
 bool Renderer::getSortPathRays() {
     return sortPathRays;
 }
 
 void Renderer::setSortPathRays(bool sortPathRays) {
     this->sortPathRays = sortPathRays;
-}
-
-float Renderer::getShadowRayLength(void) {
-    return shadowRays.getRayLength();
-}
-
-void Renderer::setShadowRayLength(float shadowRayLength) {
-    shadowRays.setRayLength(shadowRayLength);
-}
-
-float Renderer::getAORayLength(void) {
-    return aoRays.getRayLength();
-}
-
-void Renderer::setAORayLength(float aoRayLength) {
-    if (getAORadius() > aoRayLength) std::cout << "WARN <Renderer> AO Ray length must be less or equal to ao radius.\n";
-    else aoRays.setRayLength(aoRayLength);
-}
-
-float Renderer::getPathRayLength(void) {
-    assert(pathQueue.getInputRays().getRayLength() == pathQueue.getOutputRays().getRayLength());
-    return pathQueue.getInputRays().getRayLength();
-}
-
-void Renderer::setPathRayLength(float pathRayLength) {
-    pathQueue.getInputRays().setRayLength(pathRayLength);
-    pathQueue.getOutputRays().setRayLength(pathRayLength);
 }
 
 void Renderer::setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS) {
@@ -736,13 +543,11 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
     // Clear trace times.
     primaryTraceTime = 0.0f;
     shadowTraceTime = 0.0f;
-    aoTraceTime = 0.0f;
     pathTraceTime = 0.0f;
 
     // Clear number of rays.
     numberOfPrimaryRays = 0;
     numberOfShadowRays = 0;
-    numberOfAORays = 0;
     numberOfPathRays = 0;
 
     // Clear sort counts.
@@ -753,12 +558,8 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
         traceTimes[i] = 0.0f;
     }
 
-    rayType = PATH_RAYS;
-    sortShadowRays = true;
-    sortPathRays = true;
-
     // Init seeds.
-    if (rayType == PATH_RAYS || rayType == SHADOW_RAYS || rayType == AO_RAYS)
+    if (rayType == PATH_RAYS || rayType == SHADOW_RAYS)
         time += raygen.initSeeds(extent.x * extent.y, frameIndex);
 
     // For-each primary ray.
@@ -767,14 +568,8 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
             time += renderPrimary(camera, extent, framePixels);
         else if (rayType == SHADOW_RAYS)
             time += renderShadow(camera, extent, framePixels);
-        //else if (rayType == AO_RAYS)
-        //    time += renderAO(scene, camera, framePixels);
         else if (rayType == PATH_RAYS)
             time += renderPath(camera, extent, framePixels);
-        //else if (rayType == PSEUDOCOLOR_RAYS)
-        //    time += renderPseudocolor(scene, camera, framePixels);
-        //else if (rayType == THERMAL_RAYS)
-        //    time += renderThermal(camera, framePixels);
     }
 
     //// Log sort counts.
@@ -813,16 +608,12 @@ unsigned long long Renderer::getNumberOfShadowRays() {
     return numberOfShadowRays;
 }
 
-unsigned long long Renderer::getNumberOfAORays() {
-    return numberOfAORays;
-}
-
 unsigned long long Renderer::getNumberOfPathRays() {
     return numberOfPathRays;
 }
 
 unsigned long long Renderer::getNumberOfRays() {
-    return numberOfPrimaryRays + numberOfShadowRays + numberOfAORays + numberOfPathRays;
+    return numberOfPrimaryRays + numberOfShadowRays + numberOfPathRays;
 }
 
 float Renderer::getPrimaryTraceTime() {
@@ -833,34 +624,26 @@ float Renderer::getShadowTraceTime() {
     return shadowTraceTime;
 }
 
-float Renderer::getAOTraceTime() {
-    return aoTraceTime;
-}
-
 float Renderer::getPathTraceTime() {
     return pathTraceTime;
 }
 
 float Renderer::getTraceTime() {
-    return primaryTraceTime + shadowTraceTime + aoTraceTime + pathTraceTime;
+    return primaryTraceTime + shadowTraceTime + pathTraceTime;
 }
 
 float Renderer::getPrimaryTracePerformance() {
-    return primaryTraceTime == 0.0f ? 0.0f : numberOfPrimaryRays * 1.0e-6f / primaryTraceTime;
+    return primaryTraceTime == 0.0f ? 0.0f : numberOfPrimaryRays * 1.0e-3f / primaryTraceTime;
 }
 
 float Renderer::getShadowTracePerformance() {
-    return shadowTraceTime == 0.0f ? 0.0f : numberOfShadowRays * 1.0e-6f / shadowTraceTime;
-}
-
-float Renderer::getAOTracePerformance() {
-    return aoTraceTime == 0.0f ? 0.0f : numberOfAORays * 1.0e-6f / aoTraceTime;
+    return shadowTraceTime == 0.0f ? 0.0f : numberOfShadowRays * 1.0e-3f / shadowTraceTime;
 }
 
 float Renderer::getPathTracePerformance() {
-    return pathTraceTime == 0.0f ? 0.0f : numberOfPathRays * 1.0e-6f / pathTraceTime;
+    return pathTraceTime == 0.0f ? 0.0f : numberOfPathRays * 1.0e-3f / pathTraceTime;
 }
 
 float Renderer::getTracePerformance() {
-    return getTraceTime() == 0.0f ? 0.0f : getNumberOfRays() * 1.0e-6f / getTraceTime();
+    return getTraceTime() == 0.0f ? 0.0f : getNumberOfRays() * 1.0e-3f / getTraceTime();
 }
