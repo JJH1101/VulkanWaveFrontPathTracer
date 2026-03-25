@@ -95,7 +95,7 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
     pc.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getSlotToIndexBuffer().buffer);
     pc.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
     pc.screenToWorld = glm::inverse(camera.matrices.perspective * camera.matrices.view);
-    pc.origin = camera.viewPos;
+    pc.origin = camera.position;
     pc.sampleIndex = sampleIndex;
     pc.size = extent;
     pc.maxDist = camera.getFarClip();
@@ -135,37 +135,6 @@ float RayGen::shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int b
     ComputePass::DispatchDesc dispatchDesc = { ((batchEnd - batchBegin) + workGroupSize - 1) / workGroupSize, 1, 1 };
     return shadowPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
-
-//float RayGen::ao(RayBuffer & orays, RayBuffer & irays, Scene & scene, int batchBegin, int batchEnd, int numberOfSamples, float maxDist) {
-//
-//    // Closest hit.
-//    orays.resize((batchEnd - batchBegin) * numberOfSamples);
-//    orays.setClosestHit(false);
-//
-//    // Compile kernel.
-//    HipModule * module = compiler.compile();
-//    HipKernel kernel = module->getKernel("generateAORays");
-//
-//    // Set parameters.
-//    kernel.setParams(
-//        batchBegin,
-//        batchEnd - batchBegin,
-//        numberOfSamples,
-//        seeds,
-//        maxDist,
-//        irays.getRayBuffer(),
-//        orays.getRayBuffer(),
-//        irays.getResultBuffer(),
-//        orays.getSlotToIndexBuffer(),
-//        orays.getIndexToSlotBuffer(),
-//        scene.getTriangleBuffer(),
-//        scene.getVertexBuffer()
-//    );
-//
-//    // Launch.
-//    return kernel.launchTimed(batchEnd - batchBegin);
-//
-//}
 
 float RayGen::path(RayBuffer& orays, RayBuffer& irays, vks::Buffer& decreases, vks::Buffer& geometries) {
 

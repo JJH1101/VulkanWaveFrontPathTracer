@@ -30,45 +30,19 @@ private:
 
 		if (glm::radians(rotation.y) != 0)
 			rotateAxis(glm::radians(rotation.y), &vVec, &nVec, &uVec);
-		if (glm::radians(-rotation.x) != 0)
-			rotateAxis(glm::radians(-rotation.x), &uVec, &vVec, &nVec);
+		if (glm::radians(rotation.x) != 0)
+			rotateAxis(glm::radians(rotation.x), &uVec, &vVec, &nVec);
 		if (glm::radians(rotation.z) != 0)
 			rotateAxis(glm::radians(rotation.z), &nVec, &uVec, &vVec);
 
 		glm::mat4 rot(glm::vec4(uVec, 0.0f), glm::vec4(vVec, 0.0f), glm::vec4(nVec, 0.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-		viewPos = glm::vec3(position.x, -position.y, position.z);
-		matrices.view = glm::translate(glm::transpose(rot), -viewPos);
+		matrices.view = glm::translate(glm::transpose(rot), -position);
 
 		if (matrices.view != currentMatrix) {
 			updated = true;
 		}
 
 	};
-public:
-	enum CameraType { lookat, firstperson, numTypes };
-	CameraType type = CameraType::lookat;
-	glm::vec3 rotation = glm::vec3();
-	glm::vec3 position = glm::vec3();
-	glm::vec3 viewPos = glm::vec3();
-
-	float rotationSpeed = 1.0f;
-	float movementSpeed = 5.0f;
-
-	bool updated = true;
-
-	struct
-	{
-		glm::mat4 perspective;
-		glm::mat4 view;
-	} matrices;
-
-	struct
-	{
-		bool left = false;
-		bool right = false;
-		bool up = false;
-		bool down = false;
-	} keys;
 
 	void rotateAxis(float rad_angle, glm::vec3* u, glm::vec3* v, glm::vec3* n) {  // rotate u, v->n
 		float sina, cosa;
@@ -94,6 +68,31 @@ public:
 		return keys.left || keys.right || keys.up || keys.down;
 	}
 
+public:
+	enum CameraType { lookat, firstperson, numTypes };
+	CameraType type = CameraType::lookat;
+	glm::vec3 rotation = glm::vec3();
+	glm::vec3 position = glm::vec3();
+
+	float rotationSpeed = 1.0f;
+	float movementSpeed = 5.0f;
+
+	bool updated = true;
+
+	struct
+	{
+		glm::mat4 perspective;
+		glm::mat4 view;
+	} matrices;
+
+	struct
+	{
+		bool left = false;
+		bool right = false;
+		bool up = false;
+		bool down = false;
+	} keys;
+
 	float getNearClip() {
 		return znear;
 	}
@@ -113,6 +112,7 @@ public:
 		this->znear = znear;
 		this->zfar = zfar;
 		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
+		matrices.perspective[1][1] *= -1.0f;
 		
 		if (matrices.perspective != currentMatrix) {
 			updated = true;
@@ -123,6 +123,7 @@ public:
 	{
 		glm::mat4 currentMatrix = matrices.perspective;
 		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
+		matrices.perspective[1][1] *= -1.0f;
 
 		if (matrices.perspective != currentMatrix) {
 			updated = true;
@@ -146,12 +147,6 @@ public:
 		this->rotation += delta;
 		updateViewMatrix();
 	}
-
-	void setTranslation(glm::vec3 translation)
-	{
-		this->position = translation;
-		updateViewMatrix();
-	};
 
 	void translate(glm::vec3 delta)
 	{
@@ -184,8 +179,8 @@ public:
 
 				if (glm::radians(rotation.y) != 0)
 					rotateAxis(glm::radians(rotation.y), &vVec, &nVec, &uVec);
-				if (glm::radians(-rotation.x) != 0)
-					rotateAxis(glm::radians(-rotation.x), &uVec, &vVec, &nVec);
+				if (glm::radians(rotation.x) != 0)
+					rotateAxis(glm::radians(rotation.x), &uVec, &vVec, &nVec);
 				if (glm::radians(rotation.z) != 0)
 					rotateAxis(glm::radians(rotation.z), &nVec, &uVec, &vVec);
 

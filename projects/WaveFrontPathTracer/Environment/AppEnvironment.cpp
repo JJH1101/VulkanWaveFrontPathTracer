@@ -20,6 +20,7 @@ void AppEnvironment::registerOptions() {
     registerOption("Scene.filename", OPT_STRING);
     registerOption("Scene.light", "5.0 -2.0 1.0", OPT_VECTOR);
     registerOption("Scene.backgroundcolor", "0.0 0.0 1.0", OPT_VECTOR);
+    registerOption("Scene.headlight", "0", OPT_BOOL);
 
     registerOption("Renderer.numberOfPrimarySamples", "1", OPT_INT);
     registerOption("Renderer.numberOfShadowSamples", "2", OPT_INT);

@@ -313,7 +313,7 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     pipelineContext.pushConstantRanges = { pushConstantRange };
     interpolateColorsPass.createPipeline(*device, pipelineContext);
 
-    // Create reconstructShadow pipeline
+    // Create countRayHits pipeline
     shaderModule = vks::tools::loadShader((std::string(shaderPath) + "countRayHits.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsCountRayHits) };
     pipelineContext.shaderEntry.module = shaderModule;

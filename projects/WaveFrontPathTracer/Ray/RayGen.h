@@ -107,7 +107,6 @@ public:
 
     float primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, int sampleIndex);
     float shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const glm::vec3 & light, float lightRadius);
-    //float ao(RayBuffer & orays, RayBuffer & irays, Scene & scene, int batchBegin, int batchEnd, int numberOfSamples, float maxDist);
     float path(RayBuffer & orays, RayBuffer & irays, vks::Buffer & decreases, vks::Buffer & geometries);
 
     bool getRussianRoulette(void);

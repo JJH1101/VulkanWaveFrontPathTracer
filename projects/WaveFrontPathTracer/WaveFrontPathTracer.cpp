@@ -87,7 +87,7 @@ public:
 
 		camera.type = Camera::CameraType::firstperson;
 		camera.setPerspective(fov, (float)width / (float)height, nearPlane, farPlane);
-		camera.setTranslation(cameraPos);
+		camera.setPosition(cameraPos);
 		camera.setRotation(cameraRot);
 	}
 
@@ -341,10 +341,9 @@ public:
 	*/
 	void createTopLevelAccelerationStructure()
 	{
-		// We flip the matrix [1][1] = -1.0f to accomodate for the glTF up vector
 		VkTransformMatrixKHR transformMatrix = {
 			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, -1.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
 			0.0f, 0.0f, 1.0f, 0.0f };
 
 		VkAccelerationStructureInstanceKHR instance{};
@@ -499,7 +498,7 @@ public:
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue);
 
 		Environment::getInstance()->getVectorValue("Scene.light", light);
-		Environment::getInstance()->getVectorValue("Scene.backgroundColor", backgroundColor);
+		Environment::getInstance()->getVectorValue("Scene.backgroundcolor", backgroundColor);
 	}
 
 	void prepare()
@@ -516,9 +515,7 @@ public:
 		timer.init(*vulkanDevice);
 		renderer.init(*vulkanDevice, queue, timer, topLevelAS.handle);
 
-		light = camera.viewPos;
-		glm::vec3 bgColor = glm::vec3(0.529f, 0.808f, 0.98f);
-		renderer.setScene(geometryBuffer, light, model.dimensions.min, model.dimensions.max, bgColor, topLevelAS.handle);
+		renderer.setScene(geometryBuffer, model.dimensions.min, model.dimensions.max, light, backgroundColor, topLevelAS.handle);
 
 		prepared = true;
 	}
@@ -529,8 +526,12 @@ public:
 			renderer.resetFrameIndex();
 		}
 
-		light = camera.viewPos;
-		renderer.setLight(light);
+		bool headlight;
+		Environment::getInstance()->getBoolValue("Scene.headlight", headlight);
+		if (headlight) {
+			light = camera.position;
+			renderer.setLight(light);
+		}
 
 		return renderer.render(camera, glm::ivec2(width, height), pixels, framePixels);
 	}

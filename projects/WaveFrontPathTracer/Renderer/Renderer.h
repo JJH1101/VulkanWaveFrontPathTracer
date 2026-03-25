@@ -201,8 +201,6 @@ public:
     float getKeyValue(void);
     void setWhitePoint(float whitePoint);
     float getWhitePoint(void);
-    float getAORadius(void);
-    void setAORadius(float aoRadius);
     float getShadowRadius(void);
     void setShadowRadius(float shadowRadius);
     int getNumberOfPrimarySamples(void);
