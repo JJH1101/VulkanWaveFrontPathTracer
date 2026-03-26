@@ -9,7 +9,7 @@
 #include "VulkanRaytracingSample.h"
 #define VK_GLTF_MATERIAL_IDS
 #include "VulkanglTFModel.h"
-#include "Renderer/Renderer.h"
+#include "Benchmark/Benchmark.h"
 #include "Utils/gpuTimer.h"
 #include "Utils/BufferUtils.h"
 #include "Environment/AppEnvironment.h"
@@ -49,6 +49,9 @@ public:
 	Renderer renderer;
 	GPUTimer timer;
 
+	std::string mode;
+	Benchmark* benchmark = nullptr;
+
 	vkglTF::Model model;
 
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures{};
@@ -69,7 +72,9 @@ public:
 		Environment* env = new AppEnvironment();
 		Environment::setInstance(env);
 
-		env->readEnvFile(getEnvPath() + "env.json");
+		env->readEnvFile(getEnvPath() + "bistro.json");
+
+		env->getStringValue("Application.mode", mode);
 
 		int w, h;
 		env->getIntValue("Resolution.width", w);
@@ -101,6 +106,10 @@ public:
 			pixels.destroy();
 			framePixels.destroy();
 			transformBuffer.destroy();
+		}
+
+		if (benchmark) {
+			delete benchmark;
 		}
 	}
 
@@ -513,7 +522,11 @@ public:
 
 		createPresentPass();
 		timer.init(*vulkanDevice);
-		renderer.init(*vulkanDevice, queue, timer, topLevelAS.handle);
+		renderer.init(*vulkanDevice, queue, timer);
+
+		if (mode == "benchmark") {
+			benchmark = new Benchmark(&renderer);
+		}
 
 		renderer.setScene(geometryBuffer, model.dimensions.min, model.dimensions.max, light, backgroundColor, topLevelAS.handle);
 
@@ -533,7 +546,15 @@ public:
 			renderer.setLight(light);
 		}
 
-		return renderer.render(camera, glm::ivec2(width, height), pixels, framePixels);
+		float time = 0.f;
+		if (mode == "interactive") {
+			time = renderer.render(camera, glm::ivec2(width, height), pixels, framePixels);
+		}
+		else {
+			time = benchmark->run(camera, glm::ivec2(width, height), pixels, framePixels);
+		}
+
+		return time;
 	}
 
 	void present()
@@ -575,7 +596,9 @@ public:
 			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 			subresourceRange);
 
-		drawUI(cmdBuffer, frameBuffers[currentImageIndex]);
+		if (mode == "interactive") {
+			drawUI(cmdBuffer, frameBuffers[currentImageIndex]);
+		}
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuffer));
 	}

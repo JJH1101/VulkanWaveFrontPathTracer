@@ -26,7 +26,7 @@
 #define RENDERER_MAX_BATCH_SIZE (8 * 1024 * 1024)
 #define RENDERER_MAX_RECURSION_DEPTH 8
 
-#define SORT_LOG 0
+#define SORT_LOG 1
 
 class PathQueue {
 
@@ -193,7 +193,7 @@ public:
     Renderer(void);
     ~Renderer(void);
 
-    void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer, VkAccelerationStructureKHR topLevelAS);
+    void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer);
 
     RayType getRayType(void);
     void setRayType(RayType rayType);

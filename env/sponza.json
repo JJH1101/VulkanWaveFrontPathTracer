@@ -1,0 +1,38 @@
+{
+  "Application": {
+    "mode": "benchmark"
+  },
+  "Benchmark": {
+    "output": "default",
+    "images": false
+  },
+  "Resolution": {
+    "width": 1560,
+    "height": 720
+  },
+  "Scene": {
+    "filename": "models/Sponza_geometry/Sponza_geometry.gltf",
+    "light": "0.0 10.0 0.0",
+    "backgroundcolor": "0.529 0.808 0.98",
+    "headlight": false
+  },
+  "Renderer": {
+    "numberOfPrimarySamples": 1,
+    "numberOfShadowSamples": 2,
+    "shadowRadius": 1.0,
+    "rayType": "path",
+    "recursionDepth": 3,
+    "keyValue": 0.6,
+    "whitePoint": 2.0,
+    "russianRoulette": false,
+    "sortShadowRays": true,
+    "sortPathRays": true
+  },
+  "Camera": {
+    "position": "-9.532621 5.238951 0.979480",
+    "rotation": "-11.349973 279.949829 0.000000",
+    "nearPlane": 0.1,
+    "farPlane": 512.0,
+    "fieldOfView": 60.0
+  }
+}

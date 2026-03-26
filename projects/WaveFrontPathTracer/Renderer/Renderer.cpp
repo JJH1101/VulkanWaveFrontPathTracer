@@ -296,7 +296,7 @@ Renderer::~Renderer() {
     counterHost.destroy();
 }
 
-void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer, VkAccelerationStructureKHR topLevelAS) {
+void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer) {
 
     this->device = &_device;
     this->timer = &_timer;

@@ -42,13 +42,15 @@ float Tracer::radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::B
     VrdxSorterStorageRequirements requirements;
     vrdxGetSorterKeyValueStorageRequirements(sorter, size, &requirements);
 
-    vks::util::resizeDiscardBuffer(
-        *device,
-        requirements.usage,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &storageBuffer,
-        requirements.size
-    );
+    if (requirements.size > storageBuffer.size) {
+        vks::util::resizeDiscardBuffer(
+            *device,
+            requirements.usage,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            &storageBuffer,
+            requirements.size
+        );
+    }
 
     VkCommandBuffer commandBuffer = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
     timer->reset(commandBuffer);
