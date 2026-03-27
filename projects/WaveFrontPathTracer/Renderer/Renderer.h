@@ -141,10 +141,19 @@ private:
     bool sortShadowRays = false;
     bool sortPathRays = false;
 
-    int avgRayCounts[RENDERER_MAX_RECURSION_DEPTH];
-    float sortTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float traceSortTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float traceTimes[RENDERER_MAX_RECURSION_DEPTH];
+#if SORT_LOG
+    int shadowRayCounts[RENDERER_MAX_RECURSION_DEPTH + 1];
+    float shadowMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
+    float shadowSortTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
+    float shadowTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
+    float shadowTraceTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
+
+    int pathRayCounts[RENDERER_MAX_RECURSION_DEPTH];
+    float pathMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH];
+    float pathSortTimes[RENDERER_MAX_RECURSION_DEPTH];
+    float pathTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH];
+    float pathTraceTimes[RENDERER_MAX_RECURSION_DEPTH];
+#endif
 
     int pass;
     int bounce;
@@ -243,5 +252,7 @@ public:
     float getPathTracePerformance(void);
     float getTracePerformance(void);
 
+    void getShadowSortLog(int* _rayCounts, float* _mortoncodesTims, float* _sortTimes, float* _traceSortTimes, float* _traceTimes);
+    void getPathSortLog(int* _rayCounts, float* _mortoncodesTims, float* _sortTimes, float* _traceSortTimes, float* _traceTimes);
 };
 

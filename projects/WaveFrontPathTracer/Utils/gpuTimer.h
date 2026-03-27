@@ -19,7 +19,7 @@ private:
 	VkQueryPool timeStampQueryPool = VK_NULL_HANDLE;
 	uint32_t curQueryIndex = 0;
 	uint32_t queryCount; // before after
-	VkQueryResultFlagBits queryFlag = static_cast<VkQueryResultFlagBits>(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+	VkQueryResultFlagBits queryFlag = static_cast<VkQueryResultFlagBits>(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT |VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
 	float timestampPeriodDeviceLimit = 0.f;
 	std::vector<float> timerResults;
 

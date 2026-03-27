@@ -55,7 +55,7 @@ float Tracer::radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::B
     VkCommandBuffer commandBuffer = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
     timer->reset(commandBuffer);
 
-    timer->record(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+    timer->record(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
     vrdxCmdSortKeyValue(commandBuffer, sorter, size,
         keyBuffer.buffer, 0,
@@ -66,11 +66,11 @@ float Tracer::radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::B
     //vkCmdPipelineBarrier(
     //	commandBuffer,
     //	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // Src
-    //	VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // Dst
+    //    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // Dst
     //	0, 0, nullptr, 0, nullptr, 0, nullptr
-    //);
-    // This barrier is needed or not?
-    timer->record(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+    //); // This barrier is needed or not?
+    
+    timer->record(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
     device->flushCommandBuffer(commandBuffer, queue, true);
 
@@ -79,7 +79,7 @@ float Tracer::radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::B
     return timerResults[0];
 }
 
-float Tracer::mortonSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos) {
+float Tracer::mortonSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime) {
     vks::util::resizeDiscardBuffer(
         *device,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -88,11 +88,11 @@ float Tracer::mortonSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 scene
         rays.getCapacity() * sizeof(uint32_t)
     );
 
-    float mortonCodesTime = computeMortonCodes(rays, sceneMinPos, sceneMaxPos);
+    mortoncodesTime = computeMortonCodes(rays, sceneMinPos, sceneMaxPos);
     
-    float sortTime = radixSort(rays.getMortonCodeBuffer(), rays.getIndexBuffer(), rays.getSpineBuffer(), rays.getSize());
+    sortTime = radixSort(rays.getMortonCodeBuffer(), rays.getIndexBuffer(), rays.getSpineBuffer(), rays.getSize());
 
-    return mortonCodesTime + sortTime;
+    return mortoncodesTime + sortTime;
 
 }
 
@@ -202,14 +202,14 @@ float Tracer::trace(RayBuffer& rays) {
 }
 
 float Tracer::traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos) {
-    float sortTime, traceTime;
-    return traceSort(rays, sceneMinPos, sceneMaxPos, sortTime, traceTime);
+    float mortoncodesTime, sortTime, traceTime;
+    return traceSort(rays, sceneMinPos, sceneMaxPos, mortoncodesTime, sortTime, traceTime);
 }
 
-float Tracer::traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& sortTime, float& traceTime) {
+float Tracer::traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime, float& traceTime) {
     
-    sortTime = mortonSort(rays, sceneMinPos, sceneMaxPos);
+    mortonSort(rays, sceneMinPos, sceneMaxPos, mortoncodesTime, sortTime);
     traceTime = trace(rays, true);
     
-    return sortTime + traceTime;
+    return mortoncodesTime + sortTime + traceTime;
 }

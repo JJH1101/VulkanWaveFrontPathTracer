@@ -48,7 +48,7 @@ private:
 
     float computeMortonCodes(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos);
     float radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::Buffer& storageBuffer, int size);
-    float mortonSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos);
+    float mortonSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime);
     float trace(RayBuffer& rays, bool sort);
 
 public:
