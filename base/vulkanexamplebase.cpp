@@ -910,10 +910,7 @@ VulkanExampleBase::VulkanExampleBase()
 
 #if defined(_WIN32)
 	// Enable console if validation is active, debug message callback will output to it
-	if (this->settings.validation)
-	{
-		setupConsole("Vulkan example");
-	}
+	setupConsole("Vulkan example");
 	setupDPIAwareness();
 #endif
 }

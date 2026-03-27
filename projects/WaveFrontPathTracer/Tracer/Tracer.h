@@ -61,6 +61,6 @@ public:
 
     float trace(RayBuffer& rays);
     float traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos);
-    float traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& sortTime, float& traceTime);
+    float traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime, float& traceTime);
 };
 

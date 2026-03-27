@@ -76,6 +76,7 @@ void RayBuffer::setRayLength(float rayLength) {
 vks::Buffer& RayBuffer::getRayBuffer() {
     return rays;
 }
+
 vks::Buffer& RayBuffer::getResultBuffer() {
     return results;
 }

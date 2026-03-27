@@ -21,12 +21,12 @@
     "numberOfShadowSamples": 2,
     "shadowRadius": 1.0,
     "rayType": "path",
-    "recursionDepth": 3,
+    "recursionDepth": 4,
     "keyValue": 0.6,
     "whitePoint": 2.0,
     "russianRoulette": false,
-    "sortShadowRays": false,
-    "sortPathRays": false
+    "sortShadowRays": true,
+    "sortPathRays": true
   },
   "Camera": {
     "position": "-21.893288 6.842527 -2.459376",

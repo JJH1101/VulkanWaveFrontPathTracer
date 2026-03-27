@@ -71,7 +71,7 @@ void main() {
             
             // Fetch triangle.
             Geometry geometry = geometries.data[result.geometryId];
-            Triangle tri = unpackTriangle(primitiveId, geometry, vec2(result.u, result.v));
+            Triangle tri = unpackTriangle(primitiveId, geometry, unpackUnorm2x16(result.packedBary));
 
             // Colors.
             vec3 L = normalize(pc.light - (ray.origin + ray.direction * result.t));

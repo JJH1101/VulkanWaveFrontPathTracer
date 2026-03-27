@@ -72,7 +72,7 @@ public:
 		Environment* env = new AppEnvironment();
 		Environment::setInstance(env);
 
-		env->readEnvFile(getEnvPath() + "bistro.json");
+		env->readEnvFile(getEnvPath() + "sponza.json");
 
 		env->getStringValue("Application.mode", mode);
 

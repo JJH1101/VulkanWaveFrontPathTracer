@@ -14,20 +14,10 @@ struct Ray {
 };
 
 struct RayResult {
-    // Really needed all of these properties?
     int primitiveId;
     int geometryId;
-    int instanceId;
-    int customId;
     float t;
-    float u;
-    float v;
-    float _pad;
-};
-
-struct RayStats {
-    int traversedNodes;
-    int testedTriangles;
+    uint packedBary; /* pack/unpack barycentric coords using packUnorm2x16()/unpackUnorm2x16() */
 };
 
 #endif /* _RAY_GLSL_ */

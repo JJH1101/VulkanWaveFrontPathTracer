@@ -19,7 +19,7 @@ layout(push_constant) uniform PushConstants {
 
 shared uint cache[32];
 
-// Generate Shadow Rays
+// Compute Shadow Ray Counts
 layout(local_size_x = THREADBLOCK_SIZE) in;
 void main() {
 

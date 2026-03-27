@@ -21,7 +21,7 @@
 #include <glm/glm.hpp>
 using vec3 = glm::vec3;
 using vec2 = glm::vec2;
-
+using uint = uint32_t;
 #endif
 
 /*
@@ -39,15 +39,6 @@ struct Ray {
 struct RayResult {
     int primitiveId;
     int geometryId;
-    int instanceId;
-    int customId;
     float t;
-    float u;
-    float v;
-    float _pad;
-};
-
-struct RayStats {
-    int traversedNodes;
-    int testedTriangles;
+    uint packedBary;
 };

@@ -1,15 +1,7 @@
 #ifndef _GEOMETRYTYPES_GLSL_
 #define _GEOMETRYTYPES_GLSL_
 
-struct Vertex
-{
-	vec3 pos;
-	vec3 normal;
-	vec2 uv;
-};
-
 struct Triangle {
-	Vertex vertices[3]; // Really needed vertex info?
 	vec3 normal;
 	vec2 uv;
 };
@@ -24,7 +16,6 @@ layout(buffer_reference, std430) buffer Indices { uint i[]; };
 
 // This function will unpack our vertex buffer data into a single triangle and calculates uv coordinates
 Triangle unpackTriangle(uint primitiveId, Geometry geometry, vec2 barycentric) {
-	Triangle tri;
 	const uint triIndex = primitiveId * 3;
 
 	Indices indices = Indices(geometry.indexAddr);
@@ -37,18 +28,21 @@ Triangle unpackTriangle(uint primitiveId, Geometry geometry, vec2 barycentric) {
 	// glm::vec3 normal;
 	// glm::vec2 uv;
 	// ...
+	vec3 normal[3];
+	vec2 uv[3];
 	for (uint i = 0; i < 3; i++) {
 		const uint offset = indices.i[triIndex + i] * 6;
 		vec4 d0 = vertices.v[offset + 0]; // pos.xyz, n.x
 		vec4 d1 = vertices.v[offset + 1]; // n.yz, uv.xy
-		tri.vertices[i].pos = d0.xyz;
-		tri.vertices[i].normal = vec3(d0.w, d1.xy);
-		tri.vertices[i].uv = d1.zw;
+		normal[i] = vec3(d0.w, d1.xy);
+		uv[i] = d1.zw;
 	}
 	// Calculate values at barycentric coordinates
 	vec3 barycentricCoords = vec3(1.0f - barycentric.x - barycentric.y, barycentric.x, barycentric.y);
-	tri.uv = tri.vertices[0].uv * barycentricCoords.x + tri.vertices[1].uv * barycentricCoords.y + tri.vertices[2].uv * barycentricCoords.z;
-	tri.normal = normalize(tri.vertices[0].normal * barycentricCoords.x + tri.vertices[1].normal * barycentricCoords.y + tri.vertices[2].normal * barycentricCoords.z);
+	Triangle tri;
+	tri.normal = normalize(normal[0] * barycentricCoords.x + normal[1] * barycentricCoords.y + normal[2] * barycentricCoords.z);
+	tri.uv = uv[0] * barycentricCoords.x + uv[1] * barycentricCoords.y + uv[2] * barycentricCoords.z;
+
 	return tri;
 }
 

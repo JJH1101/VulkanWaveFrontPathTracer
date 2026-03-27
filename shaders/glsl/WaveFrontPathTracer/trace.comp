@@ -27,7 +27,7 @@ layout(local_size_x = THREADBLOCK_SIZE) in;
 void main() {
 
     // Task index.
-    const uint taskIndex = gl_GlobalInvocationID.x;
+    uint rayIndex = gl_GlobalInvocationID.x;
 
     // Buffer references.
     RayBuffer rays = RayBuffer(pc.rayBufferAddr);
@@ -37,13 +37,11 @@ void main() {
     if(pc.isClosestHit == 0) rayFlags |= gl_RayFlagsTerminateOnFirstHitEXT;
 
     // Only valid threads.
-    if (taskIndex < pc.numRays) {
+    if (rayIndex < pc.numRays) {
         
         // Ray index.
-        uint rayIndex = taskIndex;
-        if(pc.rayIndexBufferAddr != 0) {
-            rayIndex = IndexBuffer(pc.rayIndexBufferAddr).data[taskIndex];
-        }
+        rayIndex = (pc.rayIndexBufferAddr != 0) ? 
+                    IndexBuffer(pc.rayIndexBufferAddr).data[rayIndex] : rayIndex;
 
         // Input ray.
         Ray ray = rays.data[rayIndex];
@@ -72,24 +70,15 @@ void main() {
         if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
             result.primitiveId = rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
             result.geometryId  = rayQueryGetIntersectionGeometryIndexEXT(rq, true);
-            result.instanceId  = rayQueryGetIntersectionInstanceIdEXT(rq, true);
-            result.customId    = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true);
-        
-            result.t = rayQueryGetIntersectionTEXT(rq, true);
-        
-            vec2 bary = rayQueryGetIntersectionBarycentricsEXT(rq, true);
-            result.u = bary.x;
-            result.v = bary.y;
+            result.t = rayQueryGetIntersectionTEXT(rq, true);    
+            result.packedBary = packUnorm2x16(rayQueryGetIntersectionBarycentricsEXT(rq, true));
         } 
         // Miss
         else {
             result.primitiveId = -1;
             result.geometryId  = -1;
-            result.instanceId  = -1;
-            result.customId    = -1;
             result.t = -1.0;
-            result.u = 0.0;
-            result.v = 0.0;
+            result.packedBary = 0;
         }
         
         results.data[rayIndex] = result;

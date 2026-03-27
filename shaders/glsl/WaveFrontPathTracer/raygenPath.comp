@@ -117,7 +117,7 @@ void main() {
         
             // Fetch triangle.
             Geometry geometry = geometries.data[inputResult.geometryId];
-            Triangle tri = unpackTriangle(triangleIndex, geometry, vec2(inputResult.u, inputResult.v));
+            Triangle tri = unpackTriangle(triangleIndex, geometry, unpackUnorm2x16(inputResult.packedBary));
 
             vec3 ffNormal = faceforward(tri.normal, inputRay.direction, tri.normal);
 

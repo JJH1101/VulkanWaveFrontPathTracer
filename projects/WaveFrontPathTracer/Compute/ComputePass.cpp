@@ -95,8 +95,7 @@ float ComputePass::launchTimed(GPUTimer& timer,
 	//	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // Src
 	//	VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // Dst
 	//	0, 0, nullptr, 0, nullptr, 0, nullptr
-	//);
-	// This barrier is needed or not?
+	//); // This barrier is needed or not?
 	timer.record(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 	device->flushCommandBuffer(commandBuffer, queue, true);
