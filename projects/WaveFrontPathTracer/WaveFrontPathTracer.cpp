@@ -72,9 +72,14 @@ public:
 		Environment* env = new AppEnvironment();
 		Environment::setInstance(env);
 
-		env->readEnvFile(getEnvPath() + "sponza.json");
+		env->readEnvFile(getEnvPath() + "env.json");
 
 		env->getStringValue("Application.mode", mode);
+
+#if defined(_WIN32)
+		if(mode == "benchmark")
+			setupConsole("Vulkan Wavefront Path Tracer");
+#endif
 
 		int w, h;
 		env->getIntValue("Resolution.width", w);

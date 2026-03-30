@@ -86,7 +86,6 @@ function(buildProjects)
 endfunction(buildProjects)
 
 set(PROJECTS
-	rayquery
 	WaveFrontPathTracer
 )
 
