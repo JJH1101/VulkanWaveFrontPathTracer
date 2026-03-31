@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.4.1 FATAL_ERROR)
 
-set(NAME rayquery)
+set(NAME WaveFrontPathTracer)
 
 set(SRC_DIR ../../../projects/${NAME})
 set(BASE_DIR ../../../base)
@@ -8,7 +8,7 @@ set(EXTERNAL_DIR ../../../external)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++2a -DVK_USE_PLATFORM_ANDROID_KHR -DVK_NO_PROTOTYPES")
 
-file(GLOB EXAMPLE_SRC "${SRC_DIR}/*.cpp")
+file(GLOB_RECURSE EXAMPLE_SRC "${SRC_DIR}/*.cpp")
 
 add_library(native-lib SHARED ${EXAMPLE_SRC})
 
@@ -23,6 +23,7 @@ include_directories(${EXTERNAL_DIR})
 include_directories(${EXTERNAL_DIR}/glm)
 include_directories(${EXTERNAL_DIR}/imgui)
 include_directories(${EXTERNAL_DIR}/tinygltf)
+include_directories(${EXTERNAL_DIR}/vulkan_radix_sort)
 include_directories(${ANDROID_NDK}/sources/android/native_app_glue)
 
 target_link_libraries(

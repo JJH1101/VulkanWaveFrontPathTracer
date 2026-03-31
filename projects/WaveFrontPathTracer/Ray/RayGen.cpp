@@ -50,31 +50,27 @@ void RayGen::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     this->queue = _queue;
 
     // Create initSeeds pipeline
-    VkShaderModule shaderModule = vks::tools::loadShader((std::string(shaderPath) + "initSeeds.comp.spv").c_str(), device->logicalDevice);
     VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsInitSeeds) };
     ComputePass::PipelineContext pipelineContext;
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "initSeeds.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     initSeedsPass.createPipeline(*device, pipelineContext);
 
     // Create primary pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "raygenPrimary.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsPrimary) };
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "raygenPrimary.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     primaryPass.createPipeline(*device, pipelineContext);
 
     // Create shadow pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "raygenShadow.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsShadow) };
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "raygenShadow.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     shadowPass.createPipeline(*device, pipelineContext);
 
     // Create path pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "raygenPath.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsPath) };
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "raygenPath.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     pathPass.createPipeline(*device, pipelineContext);
 

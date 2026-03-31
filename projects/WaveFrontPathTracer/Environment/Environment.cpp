@@ -11,6 +11,7 @@
 #include <sstream>
 #include <algorithm>
 #include "../../../external/tinygltf/json.hpp"
+#include "VulkanTools.h"
 
 using json = nlohmann::json;
 
@@ -283,19 +284,47 @@ bool Environment::getStringValues(const std::string & name, std::vector<std::str
 }
 
 bool Environment::readEnvFile(const std::string & filename) {
-    std::ifstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "WARN <Environment> File '" << filename << "' does not exist or cannot be opened.\n";
+    json data;
+
+#if defined(__ANDROID__)
+    AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_BUFFER);
+    if (!asset) {
+        vks::tools::exitFatal("ERROR <Environment> Failed to load JSON \"" + filename + "\"", -1);
         return false;
     }
 
-    json data;
-    try {
-        file >> data;
-    } catch (const std::exception& e) {
-        std::cerr << "ERROR <Environment> Failed to parse JSON: " << e.what() << "\n";
+    size_t size = AAsset_getLength(asset);
+    std::vector<char> buffer(size);
+    int readBytes = AAsset_read(asset, buffer.data(), size);
+    AAsset_close(asset);
+
+    if (readBytes < 0) {
+        vks::tools::exitFatal("ERROR <Environment> Failed to read Asset \"" + filename + "\"", -1);
         return false;
     }
+
+    try {
+        data = json::parse(buffer.begin(), buffer.end());
+    }
+    catch (const std::exception& e) {
+        vks::tools::exitFatal("ERROR <Environment> Failed to parse JSON \"" + filename + "\": " + e.what(), -1);
+        return false;
+    }
+#else
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        vks::tools::exitFatal("ERROR <Environment> Failed to load file \"" + filename + "\"", -1);
+        return false;
+    }
+
+    try {
+        file >> data;
+    }
+    catch (const std::exception& e) {
+        vks::tools::exitFatal("ERROR <Environment> Failed to parse JSON \"" + filename + "\": " + e.what(), -1);
+        return false;
+    }
+#endif
 
     for (auto& it : options) {
         Option& opt = it.second;

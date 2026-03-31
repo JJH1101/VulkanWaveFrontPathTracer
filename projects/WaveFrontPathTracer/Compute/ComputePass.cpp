@@ -23,7 +23,11 @@ void ComputePass::createPipeline(vks::VulkanDevice& _device, const PipelineConte
 
 	VkPipelineShaderStageCreateInfo shaderStage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 	shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	shaderStage.module = pipelineContext.shaderEntry.module;
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+	shaderStage.module = vks::tools::loadShader(androidApp->activity->assetManager, pipelineContext.shaderEntry.filePath.c_str(), device->logicalDevice);
+#else
+	shaderStage.module = vks::tools::loadShader(pipelineContext.shaderEntry.filePath.c_str(), device->logicalDevice);
+#endif
 	shaderStage.pName = pipelineContext.shaderEntry.entryPoint.c_str();
 	shaderStage.pSpecializationInfo = pipelineContext.shaderEntry.specializationInfo;
 

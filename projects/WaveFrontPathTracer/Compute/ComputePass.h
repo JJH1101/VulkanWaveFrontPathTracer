@@ -18,7 +18,7 @@ private:
 public:
 
 	struct ShaderEntry {
-		VkShaderModule module;
+		std::string filePath = "";
 		std::string entryPoint = "main";
 		const VkSpecializationInfo* specializationInfo = nullptr;
 		VkShaderStageFlagBits stage = VK_SHADER_STAGE_COMPUTE_BIT;

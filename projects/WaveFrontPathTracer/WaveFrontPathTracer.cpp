@@ -167,10 +167,9 @@ public:
 			vkUpdateDescriptorSets(device, 1, &accelerationStructureWrite, 0, nullptr);
 		}
 
-		VkShaderModule shaderModule = vks::tools::loadShader((getShadersPath() + "WaveFrontPathTracer/present.comp.spv").c_str(), device);
 		VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsPresent) };
 		ComputePass::PipelineContext pipelineContext;
-		pipelineContext.shaderEntry.module = shaderModule;
+		pipelineContext.shaderEntry.filePath = getShadersPath() + "WaveFrontPathTracer/present.comp.spv";
 		pipelineContext.pushConstantRanges = { pushConstantRange };
 		pipelineContext.descriptorSetLayouts = { descriptorSetLayoutPresent };
 		presentPass.createPipeline(*vulkanDevice, pipelineContext);

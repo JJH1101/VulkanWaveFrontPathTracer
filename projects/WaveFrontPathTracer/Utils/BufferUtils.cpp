@@ -1,9 +1,11 @@
-#pragma once
-
 #include "BufferUtils.h"
 
 namespace vks::util {
-	
+
+#ifdef __ANDROID__
+    static PFN_vkGetBufferDeviceAddress vkGetBufferDeviceAddress = nullptr;
+#endif
+
 	void resizeBuffer(vks::VulkanDevice& device, VkQueue queue, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, vks::Buffer* buffer, VkDeviceSize size) {
 		if (buffer->size == size) return;
 
@@ -69,6 +71,13 @@ namespace vks::util {
 	}
 
 	uint64_t getBufferDeviceAddress(VkDevice device, VkBuffer buffer) {
+#ifdef __ANDROID__
+        if(!vkGetBufferDeviceAddress) {
+            vkGetBufferDeviceAddress = reinterpret_cast<PFN_vkGetBufferDeviceAddress>(
+                    vkGetDeviceProcAddr(device, "vkGetBufferDeviceAddress")
+            );
+        }
+#endif
 		VkBufferDeviceAddressInfo bufferDeviceAddressInfo{};
 		bufferDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 		bufferDeviceAddressInfo.buffer = buffer;

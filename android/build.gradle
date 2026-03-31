@@ -44,4 +44,5 @@ ext {
     compileSdkVersion = 26
     shaderPath = '../../../shaders/'
     assetPath = '../../../assets/'
+    envPath = '../../../env/'
 }

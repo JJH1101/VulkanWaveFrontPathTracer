@@ -135,18 +135,16 @@ void Tracer::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     VK_CHECK_RESULT(vkAllocateDescriptorSets(device->logicalDevice, &descriptorSetAllocateInfo, &descriptorSetTrace));
 
     // Create trace pipeline
-    VkShaderModule shaderModule = vks::tools::loadShader((std::string(shaderPath) + "trace.comp.spv").c_str(), device->logicalDevice);
     VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsTrace) };
     ComputePass::PipelineContext pipelineContext;
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "trace.comp.spv";
     pipelineContext.descriptorSetLayouts = { descriptorSetLayoutTrace };
     pipelineContext.pushConstantRanges = { pushConstantRange };
     tracePass.createPipeline(*device, pipelineContext);
 
     // Create computeMortonCodes pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "computeMortonCodesAila32.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsMortonCode) };
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "computeMortonCodesAila32.comp.spv";
     pipelineContext.descriptorSetLayouts = {};
     pipelineContext.pushConstantRanges = { pushConstantRange };
     computeMortonCodesPass.createPipeline(*device, pipelineContext);

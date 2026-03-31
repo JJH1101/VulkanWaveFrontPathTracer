@@ -4,7 +4,7 @@ apply from: '../gradle/outputfilename.gradle'
 android {
     compileSdkVersion rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "de.saschawillems.vulkanRayQuery"
+        applicationId "sogang.graphics.WaveFrontPathTracer"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -58,15 +58,21 @@ task copyTask {
     }
 
     copy {
-       from rootProject.ext.shaderPath + 'glsl/rayquery'
-       into 'assets/shaders/glsl/rayquery'
+       from rootProject.ext.shaderPath + 'glsl/WaveFrontPathTracer'
+       into 'assets/shaders/glsl/WaveFrontPathTracer'
        include '*.*'
     }
 
     copy {
-       from rootProject.ext.assetPath + 'models'
-       into 'assets/models'
-       include 'vulkanscene_shadow.gltf'
+       from rootProject.ext.assetPath + 'models/sponza'
+       into 'assets/models/sponza'
+       include '*.*'
+    }
+
+    copy {
+        from rootProject.ext.envPath
+        into 'assets/env'
+        include 'env.json'
     }
 
 }

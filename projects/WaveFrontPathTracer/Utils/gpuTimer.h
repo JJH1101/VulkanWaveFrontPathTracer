@@ -48,7 +48,7 @@ public:
 
 #ifdef __ANDROID__
 		vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-			vkGetDeviceProcAddr(device->logicalDevice, "vkCmdWriteTimestamp")
+			vkGetDeviceProcAddr(device, "vkCmdWriteTimestamp")
 		);
 #endif 
 	}

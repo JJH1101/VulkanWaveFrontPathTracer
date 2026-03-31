@@ -323,31 +323,27 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     tracer.init(*device, *timer, queue);
 
     // Create interpolateColors pipeline
-    VkShaderModule shaderModule = vks::tools::loadShader((std::string(shaderPath) + "interpolateColors.comp.spv").c_str(), device->logicalDevice);
     VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsInterpolateColors) };
     ComputePass::PipelineContext pipelineContext;
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "interpolateColors.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     interpolateColorsPass.createPipeline(*device, pipelineContext);
 
     // Create countRayHits pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "countRayHits.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsCountRayHits) };
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "countRayHits.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     countRayHitsPass.createPipeline(*device, pipelineContext);
 
     // Create reconstructSmooth pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "reconstructSmooth.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsReconstructSmooth) };
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "reconstructSmooth.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     reconstructSmoothPass.createPipeline(*device, pipelineContext);
 
     // Create reconstructShadow pipeline
-    shaderModule = vks::tools::loadShader((std::string(shaderPath) + "reconstructShadow.comp.spv").c_str(), device->logicalDevice);
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsReconstructShadow) };
-    pipelineContext.shaderEntry.module = shaderModule;
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "reconstructShadow.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     reconstructShadowPass.createPipeline(*device, pipelineContext);
 
