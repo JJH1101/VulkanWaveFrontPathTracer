@@ -125,7 +125,7 @@ void main() {
             Ray outputRay;
             outputRay.origin = origin;
             outputRay.direction = tri == -1 ? vec3(1.0f, 0.0f, 0.0f) : normalize(direction);
-            outputRay.tmin = 0.0f;
+            outputRay.tmin = EPSILON;
             outputRay.tmax = tri == -1 ? -1.0f : length(direction);
             outputRays.data[rayIndex] = outputRay;
             outputSlotToIndex.data[rayIndex] = rayIndex;

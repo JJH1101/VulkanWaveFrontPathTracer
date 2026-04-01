@@ -60,7 +60,7 @@ task copyTask {
     copy {
        from rootProject.ext.shaderPath + 'glsl/WaveFrontPathTracer'
        into 'assets/shaders/glsl/WaveFrontPathTracer'
-       include '*.*'
+       include '*.spv'
     }
 
     copy {

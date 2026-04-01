@@ -133,6 +133,7 @@ void main() {
             // Cosine distributed ray.
             outputRay.direction = cosineRandomVector(r0, r1, ffNormal);
             outputRay.origin = origin + outputRay.direction * EPSILON;
+            outputRay.tmin = EPSILON;
             outputRay.tmax = MAX_FLOAT;
             weight = vec3(0.8f); // Default albedo.
 

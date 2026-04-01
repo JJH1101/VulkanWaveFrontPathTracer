@@ -12,7 +12,11 @@ class Benchmark {
 
 private:
     static constexpr uint32_t warmupCycle = 10;
+#ifdef __ANDROID__
+    static constexpr uint32_t benchmarkCycle = 100;
+#else
     static constexpr uint32_t benchmarkCycle = 500;
+#endif
 
     Renderer* renderer;
 
