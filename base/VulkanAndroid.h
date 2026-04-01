@@ -168,6 +168,9 @@ extern PFN_vkResetCommandBuffer vkResetCommandBuffer;
 
 extern PFN_vkGetPhysicalDeviceImageFormatProperties vkGetPhysicalDeviceImageFormatProperties;
 
+extern PFN_vkCmdWriteTimestamp vkCmdWriteTimestamp;
+extern PFN_vkGetBufferDeviceAddress vkGetBufferDeviceAddress;
+
 namespace vks
 {
 	namespace android

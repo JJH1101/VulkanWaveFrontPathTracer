@@ -2,10 +2,8 @@
 #include "../Utils/BufferUtils.h"
 
 PFN_vkCmdPushDescriptorSetKHR g_vkCmdPushDescriptorSetKHR = nullptr;
-PFN_vkCmdWriteTimestamp g_vkCmdWriteTimestamp = nullptr;
 PFN_vkCmdUpdateBuffer g_vkCmdUpdateBuffer = nullptr;
 #define vkCmdPushDescriptorSetKHR g_vkCmdPushDescriptorSetKHR
-#define vkCmdWriteTimestamp g_vkCmdWriteTimestamp
 #define vkCmdUpdateBuffer g_vkCmdUpdateBuffer
 
 #define VRDX_IMPLEMENTATION
@@ -101,7 +99,6 @@ void Tracer::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     this->timer = &_timer;
     this->queue = _queue;
 
-    vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(vkGetDeviceProcAddr(device->logicalDevice, "vkCmdWriteTimestamp"));
     vkCmdPushDescriptorSetKHR = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(vkGetDeviceProcAddr(device->logicalDevice, "vkCmdPushDescriptorSetKHR"));
     vkCmdUpdateBuffer = reinterpret_cast<PFN_vkCmdUpdateBuffer>(vkGetDeviceProcAddr(device->logicalDevice, "vkCmdUpdateBuffer"));
 

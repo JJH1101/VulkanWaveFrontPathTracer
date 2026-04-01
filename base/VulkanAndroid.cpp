@@ -144,6 +144,9 @@ PFN_vkResetCommandBuffer vkResetCommandBuffer;
 
 PFN_vkGetPhysicalDeviceImageFormatProperties vkGetPhysicalDeviceImageFormatProperties;
 
+PFN_vkCmdWriteTimestamp vkCmdWriteTimestamp;
+PFN_vkGetBufferDeviceAddress vkGetBufferDeviceAddress;
+
 int32_t vks::android::screenDensity;
 
 void *libVulkan;
@@ -329,6 +332,9 @@ namespace vks
 			vkResetCommandBuffer = reinterpret_cast<PFN_vkResetCommandBuffer>(vkGetInstanceProcAddr(instance, "vkResetCommandBuffer"));
 			
 			vkGetPhysicalDeviceImageFormatProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceImageFormatProperties>(vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceImageFormatProperties"));
+		
+			vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(vkGetInstanceProcAddr(instance, "vkCmdWriteTimestamp"));
+			vkGetBufferDeviceAddress = reinterpret_cast<PFN_vkGetBufferDeviceAddress>(vkGetInstanceProcAddr(instance, "vkGetBufferDeviceAddress"));
 		}
 
 		void freeVulkanLibrary()

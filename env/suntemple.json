@@ -11,10 +11,10 @@
     "height": 720
   },
   "Scene": {
-    "filename": "models/Sponza_geometry/Sponza_geometry.gltf",
+    "filename": "models/SunTemple_geometry/SunTemple_geometry.gltf",
     "light": "0.0 10.0 0.0",
     "backgroundcolor": "0.529 0.808 0.98",
-    "headlight": false
+    "headlight": true
   },
   "Renderer": {
     "numberOfPrimarySamples": 1,
@@ -29,8 +29,8 @@
     "sortPathRays": true
   },
   "Camera": {
-    "position": "-9.532621 5.238951 0.979480",
-    "rotation": "-11.349973 279.949829 0.000000",
+    "position": "8.287917 3.804885 34.659367",
+    "rotation": "1.075014 -303.599152 0.000000",
     "nearPlane": 0.1,
     "farPlane": 512.0,
     "fieldOfView": 60.0

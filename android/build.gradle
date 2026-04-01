@@ -23,25 +23,13 @@ allprojects {
         google()
         mavenCentral()
     }
-    // This code is where all the magic happens and fixes the error.
-    subprojects {
-        afterEvaluate { project ->
-            if (project.hasProperty('android')) {
-                project.android {
-                    if (namespace == null) {
-                        namespace "de.saschawillems." + project.group
-                    }
-                }
-            }
-        }
-    }
 }
 
 ext {
     abiFilters = "arm64-v8a"
-    minSdkVersion = 21
-    targetSdkVersion = 26
-    compileSdkVersion = 26
+    minSdkVersion = 30
+    targetSdkVersion = 34
+    compileSdkVersion = 34
     shaderPath = '../../../shaders/'
     assetPath = '../../../assets/'
     envPath = '../../../env/'

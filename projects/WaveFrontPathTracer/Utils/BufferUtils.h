@@ -1,8 +1,6 @@
 #pragma once
 
 #include "VulkanDevice.h"
-#pragma once
-
 #include "gpuTimer.h"
 
 namespace vks::util {

@@ -23,9 +23,6 @@ private:
 	float timestampPeriodDeviceLimit = 0.f;
 	std::vector<float> timerResults;
 
-#ifdef __ANDROID__
-    PFN_vkCmdWriteTimestamp vkCmdWriteTimestamp;
-#endif
 public:
 	~GPUTimer()
 	{
@@ -45,12 +42,6 @@ public:
 		queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
 		queryPoolInfo.queryCount = queryCount;
 		VK_CHECK_RESULT(vkCreateQueryPool(device, &queryPoolInfo, nullptr, &timeStampQueryPool));
-
-#ifdef __ANDROID__
-		vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-			vkGetDeviceProcAddr(device, "vkCmdWriteTimestamp")
-		);
-#endif 
 	}
 	void reset(VkCommandBuffer cmdBuffer)
 	{

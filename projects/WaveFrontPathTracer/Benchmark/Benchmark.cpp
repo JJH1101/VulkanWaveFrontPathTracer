@@ -9,6 +9,16 @@
 #include "../Environment/Environment.h"
 #include <chrono>
 
+template <typename... Args>
+inline void logInfo(std::string_view fmt, Args&&... args) {
+    std::string message = std::vformat(fmt, std::make_format_args(args...));
+
+#if defined(__ANDROID__)
+    __android_log_print(ANDROID_LOG_INFO, "WaveFrontPT", "%s", message.c_str());
+#else
+    std::cout << "[INFO] " << message << std::endl;
+#endif
+}
 
 Benchmark::Benchmark(Renderer* _renderer) : renderer(_renderer) {
 	reset();
@@ -141,116 +151,82 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
 
 	if (frameCount == warmupCycle + benchmarkCycle - 1) {
         // Write results.
-        std::cout << "RAY TYPE: ";
-        std::cout << rayTypeToString(renderer->getRayType()) << "\n\n";
-
-        std::cout << "NUMBER OF RAYS: ";
-        std::cout << numberOfRays / benchmarkCycle << "\n";
-        std::cout << "NUMBER OF PRIMARY RAYS: ";
-        std::cout << numberOfPrimaryRays / benchmarkCycle << "\n";
-        std::cout << "NUMBER OF SHADOW RAYS: ";
-        std::cout << numberOfShadowRays / benchmarkCycle << "\n";
-        std::cout << "NUMBER OF PATH RAYS: ";
-        std::cout << numberOfPathRays / benchmarkCycle << "\n";
-        std::cout << "TRACE TIME: ";
-        std::cout << traceTime / benchmarkCycle << "\n";
-        std::cout << "TRACE TIME PRIMARY: ";
-        std::cout << traceTimePrimary / benchmarkCycle << "\n";
-        std::cout << "TRACE TIME SHADOW: ";
-        std::cout << traceTimeShadow / benchmarkCycle << "\n";
-        std::cout << "TRACE TIME PATH: ";
-        std::cout << traceTimePath / benchmarkCycle << "\n";
-        std::cout << "RT PERFORMANCE: ";
-        std::cout << rtPerformance / benchmarkCycle << "\n";
-        std::cout << "RT PERFORMANCE PRIMARY: ";
-        std::cout << rtPerformancePrimary / benchmarkCycle << "\n";
-        std::cout << "RT PERFORMANCE SHADOW: ";
-        std::cout << rtPerformanceShadow / benchmarkCycle << "\n";
-        std::cout << "RT PERFORMANCE PATH: ";
-        std::cout << rtPerformancePath / benchmarkCycle << "\n";
-        std::cout << "RENDER TIME KERNELS: ";
-        std::cout << renderKernelsTime / benchmarkCycle << "\n";
-        std::cout << "RENDER TIME ABSOLUTE: ";
-        std::cout << renderAbsoluteTime / benchmarkCycle << "\n\n";
+        logInfo("==================================================");
+        logInfo(" RAY TRACING BENCHMARK RESULTS ");
+        logInfo("--------------------------------------------------");
+        logInfo(" RAY TYPE                : {}", rayTypeToString(renderer->getRayType()));
+        logInfo("");
+        logInfo(" [Count (Average)]");
+        logInfo(" TOTAL RAYS              : {}", numberOfRays / benchmarkCycle);
+        logInfo(" PRIMARY RAYS            : {}", numberOfPrimaryRays / benchmarkCycle);
+        logInfo(" SHADOW RAYS             : {}", numberOfShadowRays / benchmarkCycle);
+        logInfo(" PATH RAYS               : {}", numberOfPathRays / benchmarkCycle);
+        logInfo("");
+        logInfo(" [Time (ms)]");
+        logInfo(" TRACE TOTAL             : {:.4f} ms", traceTime / benchmarkCycle);
+        logInfo(" TRACE PRIMARY           : {:.4f} ms", traceTimePrimary / benchmarkCycle);
+        logInfo(" TRACE SHADOW            : {:.4f} ms", traceTimeShadow / benchmarkCycle);
+        logInfo(" TRACE PATH              : {:.4f} ms", traceTimePath / benchmarkCycle);
+        logInfo("");
+        logInfo(" [Performance (Mrays/s)]");
+        logInfo(" RT PERF TOTAL           : {:.2f}", rtPerformance / benchmarkCycle);
+        logInfo(" RT PERF PRIMARY         : {:.2f}", rtPerformancePrimary / benchmarkCycle);
+        logInfo(" RT PERF SHADOW          : {:.2f}", rtPerformanceShadow / benchmarkCycle);
+        logInfo(" RT PERF PATH            : {:.2f}", rtPerformancePath / benchmarkCycle);
+        logInfo("");
+        logInfo(" [Overall Time]");
+        logInfo(" RENDER KERNELS          : {:.4f} ms", renderKernelsTime / benchmarkCycle);
+        logInfo(" RENDER ABSOLUTE         : {:.4f} ms", renderAbsoluteTime / benchmarkCycle);
+        logInfo("--------------------------------------------------");
+        logInfo("==================================================");
 
 #if SORT_LOG
-        uint64_t rayCountsTotal = 0;
-        float mortoncodesTimesTotal = 0.0f;
-        float sortTimesTotal = 0.0f;
-        float traceSortTimesTotal = 0.0f;
-        float traceTimesTotal = 0.0f;
+        auto printAndSum = [&](const std::string& label, uint64_t counts[], float morton[], float sort[], float traceSort[], float trace[], int steps) {
+            uint64_t totalCounts = 0;
+            float totalMorton = 0.0f, totalSort = 0.0f, totalTraceSort = 0.0f, totalTrace = 0.0f;
 
-        for (int i = 0; i < recursionDepth + 1; i++) {
-            std::cout << "SORT LOG SHADOW AT DEPTH " << i << "\n";
-            std::cout << "RAY COUNTS: ";
-            std::cout << shadowRayCounts[i] / benchmarkCycle << "\n";
-            rayCountsTotal += shadowRayCounts[i];
-            std::cout << "MORTONCODES TIME: ";
-            std::cout << shadowMortoncodesTimes[i] / benchmarkCycle << "\n";
-            mortoncodesTimesTotal += shadowMortoncodesTimes[i];
-            std::cout << "SORT TIME: ";
-            std::cout << shadowSortTimes[i] / benchmarkCycle << "\n";
-            sortTimesTotal += shadowSortTimes[i];
-            std::cout << "TRACE SORT TIME: ";
-            std::cout << shadowTraceSortTimes[i] / benchmarkCycle << "\n";
-            traceSortTimesTotal += shadowTraceSortTimes[i];
-            std::cout << "TRACE TIME: ";
-            std::cout << shadowTraceTimes[i] / benchmarkCycle << "\n\n";
-            traceTimesTotal += shadowTraceTimes[i];
-        }
+            logInfo("==================================================");
+            logInfo("--------------------------------------------------");
+            for (int i = 0; i < steps; i++) {
+                int displayDepth = (label == "PATH") ? i + 1 : i;
 
-        std::cout << "SORT LOG SHADOW TOTAL\n";
-        std::cout << "RAY COUNTS: ";
-        std::cout << rayCountsTotal / benchmarkCycle << "\n";
-        std::cout << "MORTONCODES TIME: ";
-        std::cout << mortoncodesTimesTotal / benchmarkCycle << "\n";
-        std::cout << "SORT TIME: ";
-        std::cout << sortTimesTotal / benchmarkCycle << "\n";
-        std::cout << "TRACE SORT TIME: ";
-        std::cout << traceSortTimesTotal / benchmarkCycle << "\n";
-        std::cout << "TRACE TIME: ";
-        std::cout << traceTimesTotal / benchmarkCycle << "\n\n";
+                logInfo("SORT LOG {} AT DEPTH {}", label, displayDepth);
+                logInfo("RAY COUNTS        : {}", counts[i] / benchmarkCycle);
+                logInfo("MORTONCODES TIME  : {:.4f} ms", morton[i] / benchmarkCycle);
+                logInfo("SORT TIME         : {:.4f} ms", sort[i] / benchmarkCycle);
+                logInfo("TRACE SORT TIME   : {:.4f} ms", traceSort[i] / benchmarkCycle);
+                logInfo("TRACE TIME        : {:.4f} ms\n", trace[i] / benchmarkCycle);
+                logInfo("");
 
-        rayCountsTotal = 0;
-        mortoncodesTimesTotal = 0.0f;
-        sortTimesTotal = 0.0f;
-        traceSortTimesTotal = 0.0f;
-        traceTimesTotal = 0.0f;
+                totalCounts += counts[i];
+                totalMorton += morton[i];
+                totalSort += sort[i];
+                totalTraceSort += traceSort[i];
+                totalTrace += trace[i];
+            }
 
-        for (int i = 0; i < recursionDepth; i++) {
-            std::cout << "SORT LOG PATH AT DEPTH " << i + 1 << "\n";
-            std::cout << "RAY COUNTS: ";
-            std::cout << pathRayCounts[i] / benchmarkCycle << "\n";
-            rayCountsTotal += pathRayCounts[i];
-            std::cout << "MORTONCODES TIME: ";
-            std::cout << pathMortoncodesTimes[i] / benchmarkCycle << "\n";
-            mortoncodesTimesTotal += pathMortoncodesTimes[i];
-            std::cout << "SORT TIME: ";
-            std::cout << pathSortTimes[i] / benchmarkCycle << "\n";
-            sortTimesTotal += pathSortTimes[i];
-            std::cout << "TRACE SORT TIME: ";
-            std::cout << pathTraceSortTimes[i] / benchmarkCycle << "\n";
-            traceSortTimesTotal += pathTraceSortTimes[i];
-            std::cout << "TRACE TIME: ";
-            std::cout << pathTraceTimes[i] / benchmarkCycle << "\n\n";
-            traceTimesTotal += pathTraceTimes[i];
-        }
+            logInfo("--------------------------------------------------");
+            logInfo("SORT LOG {} TOTAL", label);
+            logInfo("RAY COUNTS        : {}", totalCounts / benchmarkCycle);
+            logInfo("MORTONCODES TIME  : {:.4f} ms", totalMorton / benchmarkCycle);
+            logInfo("SORT TIME         : {:.4f} ms", totalSort / benchmarkCycle);
+            logInfo("TRACE SORT TIME   : {:.4f} ms", totalTraceSort / benchmarkCycle);
+            logInfo("TRACE TIME        : {:.4f} ms\n", totalTrace / benchmarkCycle);
+            logInfo("--------------------------------------------------");
+            logInfo("==================================================");
+            };
 
-        std::cout << "SORT LOG PATH TOTAL\n";
-        std::cout << "RAY COUNTS: ";
-        std::cout << rayCountsTotal / benchmarkCycle << "\n";
-        std::cout << "MORTONCODES TIME: ";
-        std::cout << mortoncodesTimesTotal / benchmarkCycle << "\n";
-        std::cout << "SORT TIME: ";
-        std::cout << sortTimesTotal / benchmarkCycle << "\n";
-        std::cout << "TRACE SORT TIME: ";
-        std::cout << traceSortTimesTotal / benchmarkCycle << "\n";
-        std::cout << "TRACE TIME: ";
-        std::cout << traceTimesTotal / benchmarkCycle << "\n\n";
+        printAndSum("SHADOW", shadowRayCounts, shadowMortoncodesTimes, shadowSortTimes, shadowTraceSortTimes, shadowTraceTimes, recursionDepth + 1);
+
+        printAndSum("PATH", pathRayCounts, pathMortoncodesTimes, pathSortTimes, pathTraceSortTimes, pathTraceTimes, recursionDepth);
 #endif
 
+#ifdef __ANDROID__
+        ANativeActivity_finish(androidApp->activity);
+#else
         system("pause");
         exit(0);
+#endif
 	}
 
 	frameCount++;

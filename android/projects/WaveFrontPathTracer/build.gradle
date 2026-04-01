@@ -2,7 +2,9 @@ apply plugin: 'com.android.application'
 apply from: '../gradle/outputfilename.gradle'
 
 android {
-    compileSdkVersion rootProject.ext.compileSdkVersion
+    namespace "sogang.graphics.WaveFrontPathTracer"
+    compileSdk rootProject.ext.compileSdkVersion
+
     defaultConfig {
         applicationId "sogang.graphics.WaveFrontPathTracer"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -64,9 +66,21 @@ task copyTask {
     }
 
     copy {
-       from rootProject.ext.assetPath + 'models/sponza'
-       into 'assets/models/sponza'
+       from rootProject.ext.assetPath + 'models/Sponza_geometry'
+       into 'assets/models/Sponza_geometry'
        include '*.*'
+    }
+
+    copy {
+        from rootProject.ext.assetPath + 'models/SunTemple_geometry'
+        into 'assets/models/SunTemple_geometry'
+        include '*.*'
+    }
+
+    copy {
+        from rootProject.ext.assetPath + 'models/BistroExterior_geometry'
+        into 'assets/models/BistroExterior_geometry'
+        include '*.*'
     }
 
     copy {
