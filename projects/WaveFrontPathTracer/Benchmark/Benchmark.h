@@ -37,19 +37,8 @@ private:
     uint64_t numberOfShadowRays;
     uint64_t numberOfPathRays;
 
-#if SORT_LOG
-    uint64_t shadowRayCounts[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowSortTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowTraceTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
-
-    uint64_t pathRayCounts[RENDERER_MAX_RECURSION_DEPTH];
-    float pathMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float pathSortTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float pathTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float pathTraceTimes[RENDERER_MAX_RECURSION_DEPTH];
-#endif
+	SortLog shadowSortLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
+	SortLog pathSortLogs[RENDERER_MAX_RECURSION_DEPTH];
 
     uint32_t frameCount;
 

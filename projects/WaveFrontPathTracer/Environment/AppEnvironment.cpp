@@ -11,8 +11,7 @@ void AppEnvironment::registerOptions() {
 
     registerOption("Application.mode", "interactive", OPT_STRING);
 
-    registerOption("Benchmark.output", "default", OPT_STRING);
-    registerOption("Benchmark.images", "0", OPT_BOOL);
+    registerOption("Benchmark.printSortLogs", "0", OPT_BOOL);
 
     registerOption("Resolution.width", "1024", OPT_INT);
     registerOption("Resolution.height", "768", OPT_INT);
@@ -31,7 +30,9 @@ void AppEnvironment::registerOptions() {
     registerOption("Renderer.whitePoint", "2.0", OPT_FLOAT);
     registerOption("Renderer.russianRoulette", "0", OPT_BOOL);
     registerOption("Renderer.sortShadowRays", "0", OPT_BOOL);
+    registerOption("Renderer.reorderShadowRays", "0", OPT_BOOL);
     registerOption("Renderer.sortPathRays", "0", OPT_BOOL);
+    registerOption("Renderer.reorderPathRays", "0", OPT_BOOL);
 
     registerOption("Camera.position", "0.0 0.0 0.0", OPT_VECTOR);
     registerOption("Camera.rotation", "0.0 0.0 0.0", OPT_VECTOR);

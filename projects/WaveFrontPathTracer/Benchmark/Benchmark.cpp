@@ -56,27 +56,26 @@ void Benchmark::reset() {
    numberOfShadowRays = 0;
    numberOfPathRays = 0;
 
-#ifdef SORT_LOG
-   // Clear sort counts.
-   for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
-       shadowRayCounts[i] = 0;
-       shadowMortoncodesTimes[i] = 0.0f;
-       shadowSortTimes[i] = 0.0f;
-       shadowTraceSortTimes[i] = 0.0f;
-       shadowTraceTimes[i] = 0.0f;
+   if (renderer->getPrintSortLogs()) {
+       // Clear sort counts.
+       for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH + 1; ++i) {
+           shadowSortLogs[i].rayCount = 0;
+           shadowSortLogs[i].mortonCodesTime = 0.0f;
+           shadowSortLogs[i].sortTime = 0.0f;
+           shadowSortLogs[i].reorderTime = 0.0f;
+           shadowSortLogs[i].traceSortTime = 0.0f;
+           shadowSortLogs[i].traceTime = 0.0f;
+       }
 
-       pathRayCounts[i] = 0;
-       pathMortoncodesTimes[i] = 0.0f;
-       pathSortTimes[i] = 0.0f;
-       pathTraceSortTimes[i] = 0.0f;
-       pathTraceTimes[i] = 0.0f;
+       for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
+           pathSortLogs[i].rayCount = 0;
+           pathSortLogs[i].mortonCodesTime = 0.0f;
+           pathSortLogs[i].sortTime = 0.0f;
+           pathSortLogs[i].reorderTime = 0.0f;
+           pathSortLogs[i].traceSortTime = 0.0f;
+           pathSortLogs[i].traceTime = 0.0f;
+       }
    }
-   shadowRayCounts[RENDERER_MAX_RECURSION_DEPTH] = 0;
-   shadowMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-   shadowSortTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-   shadowTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-   shadowTraceTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-#endif
 
    frameCount = 0;
 
@@ -87,29 +86,15 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
     float renderKernelsTimeCur;
     float renderAbsoluteTimeCur;
 
-#if SORT_LOG
-    int shadowRayCountsCur[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowMortoncodesTimesCur[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowSortTimesCur[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowTraceSortTimesCur[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowTraceTimesCur[RENDERER_MAX_RECURSION_DEPTH + 1];
-
-    int pathRayCountsCur[RENDERER_MAX_RECURSION_DEPTH];
-    float pathMortoncodesTimesCur[RENDERER_MAX_RECURSION_DEPTH];
-    float pathSortTimesCur[RENDERER_MAX_RECURSION_DEPTH];
-    float pathTraceSortTimesCur[RENDERER_MAX_RECURSION_DEPTH];
-    float pathTraceTimesCur[RENDERER_MAX_RECURSION_DEPTH];
-#endif
-
 	auto start = std::chrono::high_resolution_clock::now();
 	renderKernelsTimeCur = renderer->render(camera, extent, pixels, framePixels);
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<float, std::milli> duration = end - start;
 	renderAbsoluteTimeCur = duration.count();
 
-    int recursionDepth;
-    Environment::getInstance()->getIntValue("Renderer.recursionDepth", recursionDepth);
-
+    int recursionDepth = renderer->getRecursionDepth();
+	bool printSortLogs = renderer->getPrintSortLogs();
+    
 	if (frameCount >= warmupCycle) {
         renderKernelsTime += renderKernelsTimeCur;
         renderAbsoluteTime += renderAbsoluteTimeCur;
@@ -126,27 +111,18 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
 		numberOfShadowRays += renderer->getNumberOfShadowRays();
 		numberOfPathRays += renderer->getNumberOfPathRays();
 
-#if SORT_LOG
-        renderer->getShadowSortLog(shadowRayCountsCur, shadowMortoncodesTimesCur, shadowSortTimesCur, shadowTraceSortTimesCur, shadowTraceTimesCur);
-        renderer->getPathSortLog(pathRayCountsCur, pathMortoncodesTimesCur, pathSortTimesCur, pathTraceSortTimesCur, pathTraceTimesCur);
+        if (printSortLogs) {
+            SortLog* shadowSortLogsCur = renderer->getShadowSortLogs();
+            SortLog* pathSortLogsCur = renderer->getPathSortLogs();
 
-        for (int i = 0; i < recursionDepth + 1; ++i) {
-            shadowRayCounts[i] += shadowRayCountsCur[i];
-            shadowMortoncodesTimes[i] += shadowMortoncodesTimesCur[i];
-            shadowSortTimes[i] += shadowSortTimesCur[i];
-            shadowTraceSortTimes[i] += shadowTraceSortTimesCur[i];
-            shadowTraceTimes[i] += shadowTraceTimesCur[i];
+            for (int i = 0; i < recursionDepth + 1; ++i) {
+                shadowSortLogs[i] += shadowSortLogsCur[i];
+            }
+
+            for (int i = 0; i < recursionDepth; ++i) {
+                pathSortLogs[i] += pathSortLogsCur[i];
+            }
         }
-
-        for (int i = 0; i < recursionDepth; ++i) {
-            pathRayCounts[i] += pathRayCountsCur[i];
-            pathMortoncodesTimes[i] += pathMortoncodesTimesCur[i];
-            pathSortTimes[i] += pathSortTimesCur[i];
-            pathTraceSortTimes[i] += pathTraceSortTimesCur[i];
-            pathTraceTimes[i] += pathTraceTimesCur[i];
-        }
-
-#endif
 	}
 
 	if (frameCount == warmupCycle + benchmarkCycle - 1) {
@@ -180,46 +156,43 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
         logInfo("--------------------------------------------------");
         logInfo("==================================================");
 
-#if SORT_LOG
-        auto printAndSum = [&](const std::string& label, uint64_t counts[], float morton[], float sort[], float traceSort[], float trace[], int steps) {
-            uint64_t totalCounts = 0;
-            float totalMorton = 0.0f, totalSort = 0.0f, totalTraceSort = 0.0f, totalTrace = 0.0f;
+        if (printSortLogs) {
+            auto printAndSum = [&](const std::string& label, SortLog sortLogs[], int steps) {
+                SortLog totalLog{};
 
-            logInfo("==================================================");
-            logInfo("--------------------------------------------------");
-            for (int i = 0; i < steps; i++) {
-                int displayDepth = (label == "PATH") ? i + 1 : i;
+                logInfo("==================================================");
+                logInfo("--------------------------------------------------");
+                for (int i = 0; i < steps; i++) {
+                    int displayDepth = (label == "PATH") ? i + 1 : i;
 
-                logInfo("SORT LOG {} AT DEPTH {}", label, displayDepth);
-                logInfo("RAY COUNTS        : {}", counts[i] / benchmarkCycle);
-                logInfo("MORTONCODES TIME  : {:.4f} ms", morton[i] / benchmarkCycle);
-                logInfo("SORT TIME         : {:.4f} ms", sort[i] / benchmarkCycle);
-                logInfo("TRACE SORT TIME   : {:.4f} ms", traceSort[i] / benchmarkCycle);
-                logInfo("TRACE TIME        : {:.4f} ms\n", trace[i] / benchmarkCycle);
-                logInfo("");
+                    logInfo("SORT LOG {} AT DEPTH {}", label, displayDepth);
+                    logInfo("RAY COUNTS        : {}", sortLogs[i].rayCount / benchmarkCycle);
+                    logInfo("MORTONCODES TIME  : {:.4f} ms", sortLogs[i].mortonCodesTime / benchmarkCycle);
+                    logInfo("SORT TIME         : {:.4f} ms", sortLogs[i].sortTime / benchmarkCycle);
+                    logInfo("REORDER TIME      : {:.4f} ms", sortLogs[i].reorderTime / benchmarkCycle);
+                    logInfo("TRACE SORT TIME   : {:.4f} ms", sortLogs[i].traceSortTime / benchmarkCycle);
+                    logInfo("TRACE TIME        : {:.4f} ms\n", sortLogs[i].traceTime / benchmarkCycle);
+                    logInfo("");
 
-                totalCounts += counts[i];
-                totalMorton += morton[i];
-                totalSort += sort[i];
-                totalTraceSort += traceSort[i];
-                totalTrace += trace[i];
-            }
+                    totalLog += sortLogs[i];
+                }
 
-            logInfo("--------------------------------------------------");
-            logInfo("SORT LOG {} TOTAL", label);
-            logInfo("RAY COUNTS        : {}", totalCounts / benchmarkCycle);
-            logInfo("MORTONCODES TIME  : {:.4f} ms", totalMorton / benchmarkCycle);
-            logInfo("SORT TIME         : {:.4f} ms", totalSort / benchmarkCycle);
-            logInfo("TRACE SORT TIME   : {:.4f} ms", totalTraceSort / benchmarkCycle);
-            logInfo("TRACE TIME        : {:.4f} ms\n", totalTrace / benchmarkCycle);
-            logInfo("--------------------------------------------------");
-            logInfo("==================================================");
-            };
+                logInfo("--------------------------------------------------");
+                logInfo("SORT LOG {} TOTAL", label);
+                logInfo("RAY COUNTS        : {}", totalLog.rayCount / benchmarkCycle);
+                logInfo("MORTONCODES TIME  : {:.4f} ms", totalLog.mortonCodesTime / benchmarkCycle);
+                logInfo("SORT TIME         : {:.4f} ms", totalLog.sortTime / benchmarkCycle);
+                logInfo("REORDER TIME      : {:.4f} ms", totalLog.reorderTime / benchmarkCycle);
+                logInfo("TRACE SORT TIME   : {:.4f} ms", totalLog.traceSortTime / benchmarkCycle);
+                logInfo("TRACE TIME        : {:.4f} ms\n", totalLog.traceTime / benchmarkCycle);
+                logInfo("--------------------------------------------------");
+                logInfo("==================================================");
+                };
 
-        printAndSum("SHADOW", shadowRayCounts, shadowMortoncodesTimes, shadowSortTimes, shadowTraceSortTimes, shadowTraceTimes, recursionDepth + 1);
+            printAndSum("SHADOW", shadowSortLogs, recursionDepth + 1);
 
-        printAndSum("PATH", pathRayCounts, pathMortoncodesTimes, pathSortTimes, pathTraceSortTimes, pathTraceTimes, recursionDepth);
-#endif
+            printAndSum("PATH", pathSortLogs, recursionDepth);
+        }
 
 #ifdef __ANDROID__
         ANativeActivity_finish(androidApp->activity);

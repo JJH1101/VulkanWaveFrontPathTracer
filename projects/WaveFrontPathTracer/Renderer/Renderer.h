@@ -26,7 +26,24 @@
 #define RENDERER_MAX_BATCH_SIZE (8 * 1024 * 1024)
 #define RENDERER_MAX_RECURSION_DEPTH 8
 
-#define SORT_LOG 1
+struct SortLog {
+    int rayCount = 0;
+    float mortonCodesTime = 0.0f;
+    float sortTime = 0.0f;
+    float reorderTime = 0.0f;
+    float traceSortTime = 0.0f;
+    float traceTime = 0.0f;
+
+    SortLog& operator+=(const SortLog& rhs) {
+        rayCount += rhs.rayCount;
+        mortonCodesTime += rhs.mortonCodesTime;
+        sortTime += rhs.sortTime;
+        reorderTime += rhs.reorderTime;
+		traceSortTime += rhs.traceSortTime;
+        traceTime += rhs.traceTime;
+        return *this;
+    }
+};
 
 class PathQueue {
 
@@ -41,7 +58,7 @@ public:
     ~PathQueue(void);
 
     void swap(void);
-    void init(vks::VulkanDevice& device, VkQueue queue, int size);
+    void init(vks::VulkanDevice& device, int size);
 
     RayBuffer & getInputRays(void);
     RayBuffer & getOutputRays(void);
@@ -138,22 +155,17 @@ private:
     int recursionDepth;
     int numberOfHits;
 
+    std::string mode{};
+
     bool sortShadowRays = false;
+	bool reorderShadowRays = false;
     bool sortPathRays = false;
+	bool reorderPathRays = false;
 
-#if SORT_LOG
-    int shadowRayCounts[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowSortTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
-    float shadowTraceTimes[RENDERER_MAX_RECURSION_DEPTH + 1];
+    bool printSortLogs = false;
 
-    int pathRayCounts[RENDERER_MAX_RECURSION_DEPTH];
-    float pathMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float pathSortTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float pathTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH];
-    float pathTraceTimes[RENDERER_MAX_RECURSION_DEPTH];
-#endif
+	SortLog shadowSortLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
+	SortLog pathSortLogs[RENDERER_MAX_RECURSION_DEPTH];
 
     int pass;
     int bounce;
@@ -226,6 +238,13 @@ public:
     bool getSortPathRays(void);
     void setSortPathRays(bool sortPathRays);
 
+    bool getReorderShadowRays(void);
+    void setReorderShadowRays(bool reorderShadowRays);
+    bool getReorderPathRays(void);
+    void setReorderPathRays(bool reorderPathRays);
+
+	bool getPrintSortLogs(void);
+
     void setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS);
     void setSceneBounds(glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos);
     void setLight(glm::vec3& light);
@@ -252,7 +271,8 @@ public:
     float getPathTracePerformance(void);
     float getTracePerformance(void);
 
-    void getShadowSortLog(int* _rayCounts, float* _mortoncodesTims, float* _sortTimes, float* _traceSortTimes, float* _traceTimes);
-    void getPathSortLog(int* _rayCounts, float* _mortoncodesTims, float* _sortTimes, float* _traceSortTimes, float* _traceTimes);
+    SortLog* getShadowSortLogs(void);
+    SortLog* getPathSortLogs(void);
+
 };
 

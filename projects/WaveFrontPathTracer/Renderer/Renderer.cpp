@@ -17,6 +17,7 @@
 #include "../Utils/BufferUtils.h"
 #include "../Environment/Environment.h"
 #include <bit>
+#include <array>
 
 PathQueue::PathQueue() : swapBuffers(false) {
 }
@@ -28,9 +29,9 @@ void PathQueue::swap() {
     swapBuffers = !swapBuffers;
 }
 
-void PathQueue::init(vks::VulkanDevice& device, VkQueue queue, int size) {
-    rays[0].resize(device, queue, size);
-    rays[1].resize(device, queue, size);
+void PathQueue::init(vks::VulkanDevice& device, int size) {
+    rays[0].resize(device, size);
+    rays[1].resize(device, size);
 }
 
 RayBuffer & PathQueue::getInputRays() {
@@ -145,6 +146,9 @@ float Renderer::shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buff
     } while (batchIndex != inRays.getSize());
     float rayHitsTime = computeRayHits(inRays);
     numberOfShadowRays += numberOfShadowSamples * numberOfHits;
+    if (mode == "benchmark" && printSortLogs) {
+        shadowSortLogs[bounce + 1].rayCount += numberOfShadowSamples * numberOfHits;
+    }
     shadowTraceTime += traceTime;
     return traceTime + reconstructTime + rayHitsTime;
 }
@@ -172,7 +176,7 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
     vks::util::clearBuffer(*device, queue, &auxPixels);
     float time = primaryPass(camera, extent, auxPixels);
     time += shadowPass(primaryRays, auxPixels, pixels, false);
-    pathQueue.init(*device, queue, primaryRays.getSize());
+    pathQueue.init(*device, primaryRays.getSize());
     for (bounce = 0; bounce < recursionDepth; ++bounce) {
         vks::util::clearBuffer(*device, queue, &auxPixels);
         if (bounce > 0)
@@ -252,20 +256,19 @@ float Renderer::traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd
     float time = 0.0f;
     time += raygen.shadow(shadowRays, inRays, batchBegin, batchEnd, numberOfShadowSamples, scene.light, shadowRadius);
     if (sortShadowRays) {
-#if SORT_LOG
-        float sortTime;
-        float traceSortTime;
-        float mortoncodesTime;
-        float traceTime = tracer.trace(shadowRays);
-        time += tracer.traceSort(shadowRays, scene.minPos, scene.maxPos, mortoncodesTime, sortTime, traceSortTime);
-        shadowRayCounts[bounce+1] += numberOfShadowSamples * numberOfHits;
-        shadowMortoncodesTimes[bounce+1] += mortoncodesTime;
-        shadowSortTimes[bounce+1] += sortTime;
-        shadowTraceSortTimes[bounce+1] += traceSortTime;
-        shadowTraceTimes[bounce+1] += traceTime;
-#else
-        time += tracer.traceSort(shadowRays, scene.minPos, scene.maxPos);
-#endif
+        if (mode == "benchmark" && printSortLogs) {
+            std::array<float, 4> times{};
+            float traceTime = tracer.trace(shadowRays);
+            time += tracer.traceSort(shadowRays, scene.minPos, scene.maxPos, reorderShadowRays, times);
+            shadowSortLogs[bounce + 1].mortonCodesTime += times[0];
+            shadowSortLogs[bounce + 1].sortTime += times[1];
+            shadowSortLogs[bounce + 1].reorderTime += times[2];
+            shadowSortLogs[bounce + 1].traceSortTime += times[3];
+            shadowSortLogs[bounce + 1].traceTime += traceTime;
+        }
+        else {
+            time += tracer.traceSort(shadowRays, scene.minPos, scene.maxPos, reorderShadowRays);
+        }
     }
     else time += tracer.trace(shadowRays);
     return time;
@@ -274,20 +277,20 @@ float Renderer::traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd
 float Renderer::tracePathRays(RayBuffer & inRays, RayBuffer & outRays) {
     float time = raygen.path(outRays, inRays, decreases, scene.geometries);
     if (sortPathRays) {
-#if SORT_LOG
-        float sortTime;
-        float traceSortTime;
-        float mortoncodesTime;
-        float traceTime = tracer.trace(outRays);
-        time += tracer.traceSort(outRays, scene.minPos, scene.maxPos, mortoncodesTime, sortTime, traceSortTime);
-        pathRayCounts[bounce] += outRays.getSize();
-        pathMortoncodesTimes[bounce] += mortoncodesTime;
-        pathSortTimes[bounce] += sortTime;
-        pathTraceSortTimes[bounce] += traceSortTime;
-        pathTraceTimes[bounce] += traceTime;
-#else
-        time += tracer.traceSort(outRays, scene.minPos, scene.maxPos);
-#endif
+        if (mode == "benchmark" && printSortLogs) {
+            std::array<float, 4> times{};
+            float traceTime = tracer.trace(outRays);
+            time += tracer.traceSort(outRays, scene.minPos, scene.maxPos, reorderPathRays, times);
+            pathSortLogs[bounce].rayCount += outRays.getSize();
+            pathSortLogs[bounce].mortonCodesTime += times[0];
+            pathSortLogs[bounce].sortTime += times[1];
+            pathSortLogs[bounce].reorderTime += times[2];
+            pathSortLogs[bounce].traceSortTime += times[3];
+            pathSortLogs[bounce].traceTime += traceTime;
+        }
+        else {
+            time += tracer.traceSort(outRays, scene.minPos, scene.maxPos, reorderPathRays);
+        }
     }
     else time += tracer.trace(outRays);
     return time;
@@ -370,8 +373,14 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     Environment::getInstance()->getIntValue("Renderer.recursionDepth", _recursionDepth);
     setRecursionDepth(_recursionDepth);
 
+	Environment::getInstance()->getStringValue("Application.mode", mode);
+
     Environment::getInstance()->getBoolValue("Renderer.sortShadowRays", sortShadowRays);
+    Environment::getInstance()->getBoolValue("Renderer.reorderShadowRays", reorderShadowRays);
     Environment::getInstance()->getBoolValue("Renderer.sortPathRays", sortPathRays);
+    Environment::getInstance()->getBoolValue("Renderer.reorderPathRays", reorderPathRays);
+
+    Environment::getInstance()->getBoolValue("Benchmark.printSortLogs", printSortLogs);
 }
 
 Renderer::RayType Renderer::getRayType() {
@@ -491,6 +500,26 @@ void Renderer::setSortPathRays(bool sortPathRays) {
     this->sortPathRays = sortPathRays;
 }
 
+bool Renderer::getReorderShadowRays(void) {
+    return reorderShadowRays;
+}
+
+void Renderer::setReorderShadowRays(bool reorderShadowRays) {
+	this->reorderShadowRays = reorderShadowRays;
+}
+
+bool Renderer::getReorderPathRays(void) {
+	return reorderPathRays;
+}
+
+void Renderer::setReorderPathRays(bool reorderPathRays) {
+	this->reorderPathRays = reorderPathRays;
+}
+
+bool Renderer::getPrintSortLogs(void) {
+	return printSortLogs;
+}
+
 void Renderer::setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS) {
     setGeometries(geometries);
     setSceneBounds(sceneMinPos, sceneMaxPos);
@@ -563,29 +592,28 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
     numberOfShadowRays = 0;
     numberOfPathRays = 0;
 
-#ifdef SORT_LOG
-    // Clear sort counts.
-    for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
-        shadowRayCounts[i] = 0;
-        shadowMortoncodesTimes[i] = 0.0f;
-        shadowSortTimes[i] = 0.0f;
-        shadowTraceSortTimes[i] = 0.0f;
-        shadowTraceTimes[i] = 0.0f;
+    if (mode == "benchmark" && printSortLogs) {
+        // Clear sort counts.
+        for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH + 1; ++i) {
+            shadowSortLogs[i].rayCount = 0;
+            shadowSortLogs[i].mortonCodesTime = 0.0f;
+            shadowSortLogs[i].sortTime = 0.0f;
+            shadowSortLogs[i].reorderTime = 0.0f;
+            shadowSortLogs[i].traceSortTime = 0.0f;
+            shadowSortLogs[i].traceTime = 0.0f;
+        }
 
-        pathRayCounts[i] = 0;
-        pathMortoncodesTimes[i] = 0.0f;
-        pathSortTimes[i] = 0.0f;
-        pathTraceSortTimes[i] = 0.0f;
-        pathTraceTimes[i] = 0.0f;
+        for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
+            pathSortLogs[i].rayCount = 0;
+            pathSortLogs[i].mortonCodesTime = 0.0f;
+            pathSortLogs[i].sortTime = 0.0f;
+            pathSortLogs[i].reorderTime = 0.0f;
+            pathSortLogs[i].traceSortTime = 0.0f;
+            pathSortLogs[i].traceTime = 0.0f;
+        }
+
+        bounce = -1;
     }
-    shadowRayCounts[RENDERER_MAX_RECURSION_DEPTH] = 0;
-    shadowMortoncodesTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-    shadowSortTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-    shadowTraceSortTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-    shadowTraceTimes[RENDERER_MAX_RECURSION_DEPTH] = 0.0f;
-
-    bounce = -1;
-#endif
 
     // Init seeds.
     if (rayType == PATH_RAYS || rayType == SHADOW_RAYS)
@@ -677,22 +705,10 @@ float Renderer::getTracePerformance() {
     return getTraceTime() == 0.0f ? 0.0f : getNumberOfRays() * 1.0e-3f / getTraceTime();
 }
 
-void Renderer::getShadowSortLog(int* rayCounts, float* mortoncodesTims, float* sortTimes, float* traceSortTimes, float* traceTimes) {
-    for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH + 1; i++) {
-        rayCounts[i] = shadowRayCounts[i];
-        mortoncodesTims[i] = shadowMortoncodesTimes[i];
-        sortTimes[i] = shadowSortTimes[i];
-        traceSortTimes[i] = shadowTraceSortTimes[i];
-        traceTimes[i] = shadowTraceTimes[i];
-    }
+SortLog* Renderer::getShadowSortLogs() {
+	return shadowSortLogs;
 }
 
-void Renderer::getPathSortLog(int* rayCounts, float* mortoncodesTims, float* sortTimes, float* traceSortTimes, float* traceTimes) {
-    for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; i++) {
-        rayCounts[i] = pathRayCounts[i];
-        mortoncodesTims[i] = pathMortoncodesTimes[i];
-        sortTimes[i] = pathSortTimes[i];
-        traceSortTimes[i] = pathTraceSortTimes[i];
-        traceTimes[i] = pathTraceTimes[i];
-    }
+SortLog* Renderer::getPathSortLogs() {
+    return pathSortLogs;
 }

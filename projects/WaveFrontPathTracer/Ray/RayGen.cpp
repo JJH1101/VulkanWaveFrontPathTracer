@@ -81,7 +81,7 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
 
     // Closest hit.
     pixelTable.setSize(extent, *device, queue);
-    orays.resize(*device, queue, extent.x * extent.y);
+    orays.resize(*device, extent.x * extent.y);
     orays.setClosestHit(true);
     orays.getSlotToIndexBuffer() = pixelTable.getIndexToPixel();
     orays.getIndexToSlotBuffer() = pixelTable.getPixelToIndex();
@@ -107,7 +107,7 @@ float RayGen::primary(RayBuffer & orays, Camera & camera, glm::ivec2 & extent, i
 float RayGen::shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int batchEnd, int numberOfSamples, const glm::vec3 & light, float lightRadius) {
 
     // First hit.
-    orays.resize(*device, queue, (batchEnd - batchBegin) * numberOfSamples);
+    orays.resize(*device, (batchEnd - batchBegin) * numberOfSamples);
     orays.setClosestHit(false);
 
     // Set push constants
@@ -135,7 +135,7 @@ float RayGen::shadow(RayBuffer & orays, RayBuffer & irays, int batchBegin, int b
 float RayGen::path(RayBuffer& orays, RayBuffer& irays, vks::Buffer& decreases, vks::Buffer& geometries) {
 
     // Closest hit.
-    orays.resize(*device, queue, irays.getSize());
+    orays.resize(*device, irays.getSize());
     orays.setClosestHit(true);
 
     vks::util::resizeDiscardBuffer(
@@ -180,7 +180,7 @@ float RayGen::path(RayBuffer& orays, RayBuffer& irays, vks::Buffer& decreases, v
     uint32_t numberOfRays = *static_cast<uint32_t*>(counterHost.mapped);
     counterHost.unmap();
 
-    orays.resize(*device, queue, numberOfRays);
+    orays.resize(*device, numberOfRays);
 
     return time;
 }

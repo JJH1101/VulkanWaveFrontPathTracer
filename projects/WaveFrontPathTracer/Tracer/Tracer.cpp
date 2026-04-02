@@ -1,5 +1,6 @@
 #include "Tracer.h"
 #include "../Utils/BufferUtils.h"
+#include <array>
 
 PFN_vkCmdPushDescriptorSetKHR g_vkCmdPushDescriptorSetKHR = nullptr;
 PFN_vkCmdUpdateBuffer g_vkCmdUpdateBuffer = nullptr;
@@ -19,7 +20,6 @@ Tracer::~Tracer() {
 }
 
 float Tracer::computeMortonCodes(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos) {
-    
     PushConstantsMortonCode pc{};
     pc.rayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
     pc.mortonCodeAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getMortonCodeBuffer().buffer);
@@ -77,21 +77,24 @@ float Tracer::radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::B
     return timerResults[0];
 }
 
-float Tracer::mortonSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime) {
-    vks::util::resizeDiscardBuffer(
-        *device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &rays.getMortonCodeBuffer(),
-        rays.getCapacity() * sizeof(uint32_t)
-    );
+float Tracer::reorderRays(RayBuffer& rays) {
+    PushConstantsReorderRays pc{};
+    pc.rayIndexAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getIndexBuffer().buffer);
+	pc.inRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
+	pc.outRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getOutRayBuffer().buffer);
+	pc.inSlotToIndexAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getSlotToIndexBuffer().buffer);
+	pc.outSlotToIndexAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getOutSlotToIndexBuffer().buffer);
+	pc.outIndexToSlotAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getOutIndexToSlotBuffer().buffer);
+	pc.numberOfRays = rays.getSize();
 
-    mortoncodesTime = computeMortonCodes(rays, sceneMinPos, sceneMaxPos);
-    
-    sortTime = radixSort(rays.getMortonCodeBuffer(), rays.getIndexBuffer(), rays.getSpineBuffer(), rays.getSize());
+    rays.swap();
 
-    return mortoncodesTime + sortTime;
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsReorderRays), &pc };
+    std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
 
+    // Launch
+    ComputePass::DispatchDesc dispatchDesc = { (rays.getSize() + workGroupSize - 1) / workGroupSize, 1, 1 };
+    return reorderRaysPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
 void Tracer::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) {
@@ -146,6 +149,13 @@ void Tracer::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     pipelineContext.pushConstantRanges = { pushConstantRange };
     computeMortonCodesPass.createPipeline(*device, pipelineContext);
 
+    // Create reorderRays pipeline
+    pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsReorderRays) };
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "reorderRays.comp.spv";
+    pipelineContext.descriptorSetLayouts = {};
+    pipelineContext.pushConstantRanges = { pushConstantRange };
+    reorderRaysPass.createPipeline(*device, pipelineContext);
+
     // Create radix sorter
     VrdxSorterCreateInfo sorterInfo = {};
     sorterInfo.physicalDevice = device->physicalDevice;
@@ -172,15 +182,15 @@ void Tracer::setAccererationStructure(VkAccelerationStructureKHR topLevelAS) {
     vkUpdateDescriptorSets(device->logicalDevice, 1, &accelerationStructureWrite, 0, nullptr);
 }
 
-float Tracer::trace(RayBuffer& rays, bool sort) {
+float Tracer::trace(RayBuffer& rays, bool indirectIndexing) {
     int numRays = rays.getSize();
 
     // Set push constants
     PushConstantsTrace pc{};
     pc.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
     pc.resultBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
+	pc.rayIndexBufferAddr = (indirectIndexing) ? vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getIndexBuffer().buffer) : 0;
     pc.numRays = numRays;
-    pc.rayIndexBufferAddr = sort ? vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getIndexBuffer().buffer) : 0;
     pc.isClosestHit = rays.getClosestHit();
 
     ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsTrace), &pc };
@@ -193,18 +203,23 @@ float Tracer::trace(RayBuffer& rays, bool sort) {
 }
 
 float Tracer::trace(RayBuffer& rays) {
-    return trace(rays, false);
+	return trace(rays, false);
 }
 
-float Tracer::traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos) {
-    float mortoncodesTime, sortTime, traceTime;
-    return traceSort(rays, sceneMinPos, sceneMaxPos, mortoncodesTime, sortTime, traceTime);
+float Tracer::traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, bool reorderRaysFlag) {
+    std::array<float, 4> times{};
+    return traceSort(rays, sceneMinPos, sceneMaxPos, reorderRaysFlag, times);
 }
 
-float Tracer::traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime, float& traceTime) {
+float Tracer::traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, bool reorderRaysFlag, std::array<float, 4>& times) {
+	rays.resizeReorderingBuffers(*device, reorderRaysFlag);
+
+    times[0] = computeMortonCodes(rays, sceneMinPos, sceneMaxPos);
+    times[1] = radixSort(rays.getMortonCodeBuffer(), rays.getIndexBuffer(), rays.getSpineBuffer(), rays.getSize());
+    if (reorderRaysFlag) {
+        times[2] = reorderRays(rays);
+    }
+    times[3] = trace(rays, !reorderRaysFlag);
     
-    mortonSort(rays, sceneMinPos, sceneMaxPos, mortoncodesTime, sortTime);
-    traceTime = trace(rays, true);
-    
-    return mortoncodesTime + sortTime + traceTime;
+	return times[0] + times[1] + times[2] + times[3];
 }

@@ -1,0 +1,47 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#define THREADBLOCK_SIZE 256
+
+#include "ray.glsl"
+
+layout(buffer_reference, std430) readonly restrict buffer RayBufferRO { Ray data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer RayBufferWO { Ray data[]; };
+layout(buffer_reference, std430) readonly restrict buffer IntBufferRO { int data[]; };
+layout(buffer_reference, std430) writeonly restrict buffer IntBufferWO { int data[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint64_t rayIndexAddr;
+    uint64_t inRayAddr;
+    uint64_t outRayAddr;
+    uint64_t inSlotToIndexAddr;
+    uint64_t outSlotToIndexAddr;
+    uint64_t outIndexToSlotAddr;
+    int numberOfRays;
+} pc;
+
+// Shading
+layout(local_size_x = THREADBLOCK_SIZE) in;
+void main() {
+    const int rayIndex = int(gl_GlobalInvocationID.x);
+
+    IntBufferRO rayIndices = IntBufferRO(pc.rayIndexAddr);
+    RayBufferRO inRays = RayBufferRO(pc.inRayAddr);
+    RayBufferWO outRays = RayBufferWO(pc.outRayAddr);
+    IntBufferRO inSlotToIndex = IntBufferRO(pc.inSlotToIndexAddr);
+    IntBufferWO outSlotToIndex = IntBufferWO(pc.outSlotToIndexAddr);
+    IntBufferWO outIndexToSlot = IntBufferWO(pc.outIndexToSlotAddr);
+
+    if (rayIndex < pc.numberOfRays) {
+
+        int oldRayIndex = rayIndices.data[rayIndex];
+        int index = inSlotToIndex.data[oldRayIndex];
+        outRays.data[rayIndex] = inRays.data[oldRayIndex];
+        outSlotToIndex.data[rayIndex] = index;
+        outIndexToSlot.data[index] = rayIndex;
+
+    }
+
+}

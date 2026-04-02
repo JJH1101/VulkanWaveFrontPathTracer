@@ -22,6 +22,7 @@ private:
 
     ComputePass tracePass;
     ComputePass computeMortonCodesPass;
+    ComputePass reorderRaysPass;
 
     VrdxSorter sorter{ VK_NULL_HANDLE };
 
@@ -42,14 +43,25 @@ private:
         alignas(16) glm::vec3 sceneSize;
     };
 
+    struct PushConstantsReorderRays {
+        uint64_t rayIndexAddr;
+        uint64_t inRayAddr;
+        uint64_t outRayAddr;
+        uint64_t inSlotToIndexAddr;
+        uint64_t outSlotToIndexAddr;
+        uint64_t outIndexToSlotAddr;
+        int numberOfRays;
+    };
+
     VkDescriptorPool descriptorPoolTrace{ VK_NULL_HANDLE };
     VkDescriptorSetLayout descriptorSetLayoutTrace{ VK_NULL_HANDLE };
     VkDescriptorSet descriptorSetTrace{ VK_NULL_HANDLE };
 
     float computeMortonCodes(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos);
     float radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::Buffer& storageBuffer, int size);
-    float mortonSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime);
-    float trace(RayBuffer& rays, bool sort);
+    float reorderRays(RayBuffer& rays);
+
+    float trace(RayBuffer& rays, bool indirectIndexing);
 
 public:
 
@@ -60,7 +72,7 @@ public:
     void setAccererationStructure(VkAccelerationStructureKHR topLevelAS);
 
     float trace(RayBuffer& rays);
-    float traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos);
-    float traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, float& mortoncodesTime, float& sortTime, float& traceTime);
+    float traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, bool reorderRays);
+    float traceSort(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos, bool reorderRays, std::array<float, 4>& times);
 };
 
