@@ -65,29 +65,30 @@ task copyTask {
        include '*.spv'
     }
 
-    copy {
-       from rootProject.ext.assetPath + 'models/Sponza_geometry'
-       into 'assets/models/Sponza_geometry'
-       include '*.*'
-    }
-
-    copy {
-        from rootProject.ext.assetPath + 'models/SunTemple_geometry'
-        into 'assets/models/SunTemple_geometry'
-        include '*.*'
-    }
-
-    copy {
-        from rootProject.ext.assetPath + 'models/BistroExterior_geometry'
-        into 'assets/models/BistroExterior_geometry'
-        include '*.*'
-    }
-
-    copy {
-        from rootProject.ext.envPath
-        into 'assets/env'
-        include 'env.json'
-    }
+//    Use these only when storing data inside the APK
+//    copy {
+//       from rootProject.ext.assetPath + 'models/Sponza_geometry'
+//       into 'assets/models/Sponza_geometry'
+//       include '*.*'
+//    }
+//
+//    copy {
+//        from rootProject.ext.assetPath + 'models/SunTemple_geometry'
+//        into 'assets/models/SunTemple_geometry'
+//        include '*.*'
+//    }
+//
+//    copy {
+//        from rootProject.ext.assetPath + 'models/BistroExterior_geometry'
+//        into 'assets/models/BistroExterior_geometry'
+//        include '*.*'
+//    }
+//
+//    copy {
+//        from rootProject.ext.envPath
+//        into 'assets/env'
+//        include 'env.json'
+//    }
 
 }
 

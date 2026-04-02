@@ -286,7 +286,7 @@ bool Environment::getStringValues(const std::string & name, std::vector<std::str
 bool Environment::readEnvFile(const std::string & filename) {
     json data;
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) && !USE_ANDROID_EXTERNAL_PATH
     AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_BUFFER);
     if (!asset) {
         vks::tools::exitFatal("ERROR <Environment> Failed to load JSON \"" + filename + "\"", -1);

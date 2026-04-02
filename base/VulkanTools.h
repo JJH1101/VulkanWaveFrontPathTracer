@@ -60,6 +60,7 @@
 }
 #endif
 
+#define USE_ANDROID_EXTERNAL_PATH 1
 const std::string getAssetPath();
 const std::string getShaderBasePath();
 const std::string getEnvPath();

@@ -33,7 +33,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #define TINYGLTF_NO_STB_IMAGE_WRITE
-#ifdef VK_USE_PLATFORM_ANDROID_KHR
+#if defined(VK_USE_PLATFORM_ANDROID_KHR) && !USE_ANDROID_EXTERNAL_PATH
 #define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
 #endif
 #include "tiny_gltf.h"
