@@ -18,12 +18,10 @@ void AppEnvironment::registerOptions() {
 
     registerOption("Scene.filename", OPT_STRING);
     registerOption("Scene.light", "5.0 -2.0 1.0", OPT_VECTOR);
-    registerOption("Scene.backgroundcolor", "0.0 0.0 1.0", OPT_VECTOR);
+    registerOption("Scene.lightScale", "0.001", OPT_FLOAT);
     registerOption("Scene.headlight", "0", OPT_BOOL);
 
-    registerOption("Renderer.numberOfPrimarySamples", "1", OPT_INT);
-    registerOption("Renderer.numberOfShadowSamples", "2", OPT_INT);
-    registerOption("Renderer.shadowRadius", "0.001", OPT_FLOAT);
+    registerOption("Renderer.samplesPerPixel", "1", OPT_INT);
     registerOption("Renderer.rayType", "primary", OPT_STRING);
     registerOption("Renderer.recursionDepth", "1", OPT_INT);
     registerOption("Renderer.keyValue", "0.6", OPT_FLOAT);

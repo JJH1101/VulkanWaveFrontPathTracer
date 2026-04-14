@@ -25,10 +25,8 @@ RayBuffer::~RayBuffer() {
     rays[0].destroy();
     rays[1].destroy();
     results.destroy();
-    indexToSlot[0].destroy();
-    indexToSlot[1].destroy();
-    slotToIndex[0].destroy();
-    slotToIndex[1].destroy();
+    indexToPixel[0].destroy();
+    indexToPixel[1].destroy();
     mortonCodes.destroy();
     indices.destroy();
     spine.destroy();
@@ -58,8 +56,7 @@ void RayBuffer::resize(vks::VulkanDevice& device, int size) {
 
 		vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &rays[swapIdx], size * sizeof(Ray));
         vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &results, size * sizeof(RayResult));
-        vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToSlot[swapIdx], size * sizeof(int));
-        vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &slotToIndex[swapIdx], size * sizeof(int));
+        vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToPixel[swapIdx], size * sizeof(int));
     }
     this->size = size;
 }
@@ -73,8 +70,7 @@ void RayBuffer::resizeReorderingBuffers(vks::VulkanDevice& device, bool reorderR
     if (rays[swapIdx].size < capacity * sizeof(Ray)) {
         if (reorderRays) {
             vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &rays[swapIdx], capacity * sizeof(Ray));
-            vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToSlot[swapIdx], capacity * sizeof(int));
-            vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &slotToIndex[swapIdx], capacity * sizeof(int));
+            vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToPixel[swapIdx], capacity * sizeof(int));
         }
         vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indices, capacity * sizeof(uint32_t));
 		vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &mortonCodes, capacity * sizeof(uint32_t));
@@ -122,18 +118,10 @@ vks::Buffer& RayBuffer::getSpineBuffer() {
     return spine;
 }
 
-vks::Buffer& RayBuffer::getIndexToSlotBuffer() {
-    return (swapBuffers) ? indexToSlot[1] : indexToSlot[0];
+vks::Buffer& RayBuffer::getIndexToPixelBuffer() {
+    return (swapBuffers) ? indexToPixel[1] : indexToPixel[0];
 }
 
-vks::Buffer& RayBuffer::getOutIndexToSlotBuffer() {
-    return (swapBuffers) ? indexToSlot[0] : indexToSlot[1];
-}
-
-vks::Buffer& RayBuffer::getSlotToIndexBuffer() {
-    return (swapBuffers) ? slotToIndex[1] : slotToIndex[0];
-}
-
-vks::Buffer& RayBuffer::getOutSlotToIndexBuffer() {
-    return (swapBuffers) ? slotToIndex[0] : slotToIndex[1];
+vks::Buffer& RayBuffer::getOutIndexToPixelBuffer() {
+    return (swapBuffers) ? indexToPixel[0] : indexToPixel[1];
 }

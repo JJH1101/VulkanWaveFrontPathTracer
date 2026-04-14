@@ -25,7 +25,6 @@ private:
 
     glm::ivec2 size;
     vks::Buffer indexToPixel; // int
-    vks::Buffer pixelToIndex; // int
 
     void recalculate(vks::VulkanDevice& device, VkQueue queue);
 
@@ -38,6 +37,5 @@ public:
 
     const glm::ivec2 & getSize(void);
     vks::Buffer & getIndexToPixel(void);
-    vks::Buffer & getPixelToIndex(void);
 
 };

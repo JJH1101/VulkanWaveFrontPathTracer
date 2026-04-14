@@ -6,52 +6,38 @@
 #define THREADBLOCK_SIZE 256
 
 #include "ray.glsl"
-#include "geometrytypes.glsl"
-
-layout(buffer_reference, std430) readonly restrict buffer ResultBuffer { RayResult data[]; };
-layout(buffer_reference, std430) readonly restrict buffer IndexBuffer { int data[]; };
-layout(buffer_reference, std430) readonly restrict buffer inPixelBuffer { vec4 data[]; };
-layout(buffer_reference, std430) buffer restrict outPixelBuffer { vec4 data[]; };
+#include "bufferReferences.glsl"
 
 layout(push_constant) uniform PushConstants {
     uint64_t outputResultAddr;
     uint64_t indexToPixelAddr;
-    uint64_t indexToSlotAddr;
     uint64_t inPixelAddr;
     uint64_t outPixelAddr;
-    int batchBegin;
-    int batchSize;
-    int numberOfSamples;
-    int replace;
+    uint numberOfRays;
+    uint replace;
 } pc;
 
-// Shading
+// Occlusion
 layout(local_size_x = THREADBLOCK_SIZE) in;
 void main() {
     const uint taskIndex = gl_GlobalInvocationID.x;
 
-    ResultBuffer outputResults = ResultBuffer(pc.outputResultAddr);
-    IndexBuffer indexToPixel = IndexBuffer(pc.indexToPixelAddr);
-    IndexBuffer indexToSlot = IndexBuffer(pc.indexToSlotAddr);
-    inPixelBuffer inPixels = inPixelBuffer(pc.inPixelAddr);
-    outPixelBuffer outPixels = outPixelBuffer(pc.outPixelAddr);
+    RayResultBufferRO outputResults = RayResultBufferRO(pc.outputResultAddr);
+    IntBufferRO indexToPixel = IntBufferRO(pc.indexToPixelAddr);
+    Vec4BufferRO inPixels = Vec4BufferRO(pc.inPixelAddr);
+    Vec4BufferRW outPixels = Vec4BufferRW(pc.outPixelAddr);
 
-    if (taskIndex < pc.batchSize) {
+    if (taskIndex < pc.numberOfRays) {
 
         // Pixel.
-        int pixel = indexToPixel.data[pc.batchBegin + taskIndex];
+        int pixel = indexToPixel.data[taskIndex];
 
         // Color.
         vec3 color = vec3(inPixels.data[pixel]);
 
         // Shadow factor.
-        float shadow = 0.0f;
-        for (int i = 0; i < pc.numberOfSamples; ++i) {
-            RayResult outputResult = outputResults.data[indexToSlot.data[int(taskIndex) * pc.numberOfSamples + i]];
-            if (outputResult.primitiveId == -1)
-                shadow += 1.0f;
-        }
-        shadow /= float(pc.numberOfSamples);
+        RayResult outputResult = outputResults.data[taskIndex];
+        float shadow = (outputResult.primitiveId == -1) ? 1.0f : 0.0f;
 
         // Update color.
         if (pc.replace != 0) outPixels.data[pixel] = vec4(color * shadow, 1.0f);

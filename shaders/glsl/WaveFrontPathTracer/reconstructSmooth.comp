@@ -1,97 +1,223 @@
-#version 460
+﻿#version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_ballot : require
 
 #define THREADBLOCK_SIZE 256
 
 #include "ray.glsl"
 #include "geometrytypes.glsl"
+#include "bufferReferences.glsl"
 
-layout(buffer_reference, std430) readonly restrict buffer RayBuffer { Ray data[]; };
-layout(buffer_reference, std430) readonly restrict buffer RayResultBuffer { RayResult data[]; };
-layout(buffer_reference, std430) readonly restrict buffer IndexToPixel { int data[]; };
-layout(buffer_reference, std430) restrict buffer PixelBuffer { vec4 data[]; };
-layout(buffer_reference, std430) readonly restrict buffer DecreaseBuffer { vec4 data[]; };
-layout(buffer_reference, std430) readonly restrict buffer GeometryBuffer { Geometry data[]; };
+#define M_PI 3.14159265358979323846
+#define MAX_FLOAT (3.402823466e+38f)
+
+uint lcg(inout uint seed) {
+    const uint LCG_A = 1103515245u;
+    const uint LCG_C = 12345u;
+    const uint LCG_M = 0x00FFFFFFu;
+    seed = (LCG_A * seed + LCG_C);
+    return seed & LCG_M;
+}
+
+float randf(inout uint seed) {
+    return (float(lcg(seed)) / float(0x01000000));
+}
+
+// Based on Tom Duff, James Burgess, Per Christensen, Christophe Hery, Andrew Kensler, Max Liani, and
+// Ryusuke Villemin, Building an Orthonormal Basis, Revisited, Journal of Computer Graphics
+// Techniques (JCGT), vol. 6, no. 1, 1–8, 2017
+// http://jcgt.org/published/0006/01/01/
+void rightHandedBase(vec3 n, out vec3 b1, out vec3 b2) {
+    float s = (n.z >= 0.0) ? 1.0 : -1.0;
+    const float a = -1.0f / (s + n.z);
+    const float b = n.x * n.y * a;
+    b1 = vec3(1.0f + s * n.x * n.x * a, s * b, -s * n.x); // Tangent
+    b2 = vec3(b, s + n.y * n.y * a, -n.y); // Binormal
+}
+
+vec3 cosineRandomVector(float r0, float r1, vec3 normal) {
+    float theta = 2.0f * M_PI * r1;
+    float radius = sqrt(r0);
+    float x = radius * sin(theta);
+    float z = radius * cos(theta);
+    float y = sqrt(1.0f - r0);
+    vec3 u, v;
+    rightHandedBase(normal, u, v);
+    return x * u + z * v + y * normal;
+}
+
+void jenkinsMix(inout uint a, inout uint b, inout uint c) {
+    a -= b; a -= c; a ^= (c >> 13);
+    b -= c; b -= a; b ^= (a << 8);
+    c -= a; c -= b; c ^= (b >> 13);
+    a -= b; a -= c; a ^= (c >> 12);
+    b -= c; b -= a; b ^= (a << 16);
+    c -= a; c -= b; c ^= (b >> 5);
+    a -= b; a -= c; a ^= (c >> 3);
+    b -= c; b -= a; b ^= (a << 10);
+    c -= a; c -= b; c ^= (b >> 15); // ~36 instructions
+}
 
 layout(push_constant) uniform PushConstants {
-    uint64_t rayAddr;
-    uint64_t resultAddr;
-    uint64_t idxToPixelAddr;
+    uint64_t inputRayAddr;
+    uint64_t inputResultAddr;
+    uint64_t inputIdxToPixelAddr;
+
     uint64_t pixelAddr;
     uint64_t decreaseAddr;
+    uint64_t seedAddr;
     uint64_t geometryAddr;
 
+    uint64_t shadowRayAddr;
+    uint64_t shadowIdxToPixelAddr;
+
+    uint64_t pathRayAddr;
+    uint64_t pathIdxToPixelAddr;
+
+    uint64_t counterAddr;
+
     vec3 light;
-    int numberOfRays;
-    vec3 backgroundColor;
-    int numberOfSamples;
+    float lightRadius;
+
+    uint russianRoulette;
+    uint numberOfRays;
 } pc;
 
-// Shading
+// Shading & Generate next bounce's rays
 layout(local_size_x = THREADBLOCK_SIZE) in;
 void main() {
     const uint taskIndex = gl_GlobalInvocationID.x;
 
-    RayBuffer rays = RayBuffer(pc.rayAddr);
-    RayResultBuffer results = RayResultBuffer(pc.resultAddr);
-    IndexToPixel indexToPixel = IndexToPixel(pc.idxToPixelAddr);
-    PixelBuffer pixels = PixelBuffer(pc.pixelAddr);
-    DecreaseBuffer decreases = DecreaseBuffer(pc.decreaseAddr);
-    GeometryBuffer geometries = GeometryBuffer(pc.geometryAddr);
+    // Buffer references.
+    RayBufferRO inputRays = RayBufferRO(pc.inputRayAddr);
+    RayResultBufferRO inputResults = RayResultBufferRO(pc.inputResultAddr);
+    IntBufferRO inputIndexToPixel = IntBufferRO(pc.inputIdxToPixelAddr);
 
+    Vec4BufferRO pixels = Vec4BufferRO(pc.pixelAddr);
+    Vec4BufferRW decreases = Vec4BufferRW(pc.decreaseAddr);
+    UintBufferRW seeds = UintBufferRW(pc.seedAddr);
+    GeometryBufferRO geometries = GeometryBufferRO(pc.geometryAddr);
+
+    // Only active tasks
     if (taskIndex < pc.numberOfRays) {
-
-        // Pixel.
-        int pixel = indexToPixel.data[taskIndex];
+        int pixel = inputIndexToPixel.data[taskIndex];
+        vec3 decrease = decreases.data[pixel].xyz;
+        RayResult inputResult = inputResults.data[taskIndex];
+        Ray inputRay = inputRays.data[taskIndex];
+        uint seed = seeds.data[taskIndex];
 
         // Color.
-        vec3 color = vec3(pixels.data[pixel]);
+        vec3 color = vec3(0.0f);
 
-        // Decrease.
-        vec3 decrease = decreases.data[pixel].xyz;
+        // Shadow ray (default: invalid ray).
+        Ray shadowRay;
+        shadowRay.origin = vec3(0.0f);
+        shadowRay.direction = vec3(1.0f, 0.0f, 0.0f);
+        shadowRay.tmin = 0.0f;
+        shadowRay.tmax = -1.0f;
 
-        // Ray result.
-        RayResult result = results.data[taskIndex];
-
-        // Ray.
-        Ray ray = rays.data[taskIndex];
+        // Path ray.
+        Ray pathRay;
+        bool generatePathRay = false;
+        vec3 weight = vec3(1.0f);
 
         // Triangle index.
-        int primitiveId = result.primitiveId;
+        int primitiveId = inputResult.primitiveId;
 
         // Miss.
         if (primitiveId == -1) {
-            color += decrease * pc.backgroundColor / float(pc.numberOfSamples);
+            color = decrease * vec3(0.529f, 0.808f, 0.98f);
         }
 
         // Hit.
         else {
             
-            // Fetch triangle.
-            Geometry geometry = geometries.data[result.geometryId];
-            Triangle tri = unpackTriangle(primitiveId, geometry, unpackUnorm2x16(result.packedBary));
+            // Fetch hit.
+            Geometry geometry = geometries.data[inputResult.geometryId];
+            Triangle tri = unpackTriangle(primitiveId, geometry, unpackUnorm2x16(inputResult.packedBary));
+            vec3 hitPos = inputRay.origin + inputRay.direction * inputResult.t;
+            vec3 ffNormal = faceforward(tri.normal, inputRay.direction, tri.normal);
 
-            // Colors.
-            vec3 L = normalize(pc.light - (ray.origin + ray.direction * result.t));
+            // Pick random offset.
+            uint hashA = seed + taskIndex;
+            uint hashB = 0x9e3779b9u;
+            uint hashC = 0x9e3779b9u;
+            jenkinsMix(hashA, hashB, hashC);
+            vec3 offset = vec3(float(hashA) * exp2(-32.0f), float(hashB) * exp2(-32.0f), float(hashC) * exp2(-32.0f));
+            
+            // Sample light.
+            vec3 lightPos = vec3(0.0f, 0.0f, 0.5f);
+            lightPos = fract(lightPos + offset); // Cranley-Patterson
+            lightPos = 2.0f * lightPos - 1.0f; // [-1,1]
+            vec3 lightDir = (pc.light + pc.lightRadius * lightPos) - hitPos;
+            float lightLength = max(length(lightDir), 0.01f);
+            lightDir /= lightLength;
+            
+            // Direct shading.
+            color = decrease * max(dot(ffNormal, lightDir), 0.1f); 
 
-            // N * L
-            vec3 ffNormal = faceforward(tri.normal, ray.direction, tri.normal);
-            float NdotL = dot(ffNormal, L);
+            // Generate shadow ray.
+            const float EPSILON = 1.0e-3f;
+            shadowRay.direction = lightDir;
+            shadowRay.origin = hitPos + ffNormal * EPSILON;
+            shadowRay.tmin = EPSILON;
+            shadowRay.tmax = lightLength;
 
-            // Diffuse.
-            float alpha = max(NdotL, 0.1f);
-//            float alpha = abs(NdotL);
+            // Generate path ray.
+            if(pc.pathRayAddr > 0) {
+                pathRay.direction = cosineRandomVector(randf(seed), randf(seed), ffNormal);
+                pathRay.origin = hitPos + ffNormal * EPSILON;
+                pathRay.tmin = EPSILON;
+                pathRay.tmax = MAX_FLOAT;
+                weight = decrease * vec3(0.8f); // Default albedo.
+                generatePathRay = true;
 
-            // Add color.
-            color += decrease * alpha / float(pc.numberOfSamples);
-
+                // Save seed.
+                seeds.data[taskIndex] = seed;
+            }
         }
 
         // Update color.
         pixels.data[pixel] = vec4(color, 1.0f);
 
-    }
+        // Write shadow rays.
+        if (pc.shadowRayAddr > 0) {
+            RayBufferWO shadowRays = RayBufferWO(pc.shadowRayAddr);
+            IntBufferWO shadowIndexToPixel = IntBufferWO(pc.shadowIdxToPixelAddr);
 
+            shadowRays.data[taskIndex] = shadowRay;
+            shadowIndexToPixel.data[taskIndex] = pixel;
+        }
+
+        // Write path rays.
+        if(pc.pathRayAddr > 0) {
+            Counter counter = Counter(pc.counterAddr);
+            RayBufferWO pathRays = RayBufferWO(pc.pathRayAddr);
+            IntBufferWO pathIndexToPixel = IntBufferWO(pc.pathIdxToPixelAddr);
+
+            uvec4 ballot = subgroupBallot(generatePathRay);
+            uint numRays = subgroupBallotBitCount(ballot);
+            uint rayOffset = subgroupBallotExclusiveBitCount(ballot);
+
+            uint subgroupOffset = 0;
+            if (subgroupElect() && numRays > 0) {
+                subgroupOffset = atomicAdd(counter.data, numRays);
+            }
+
+            uint rayIndex = subgroupBroadcastFirst(subgroupOffset) + rayOffset;
+
+            if (generatePathRay) {
+                RayBufferWO pathRays = RayBufferWO(pc.pathRayAddr);
+                IntBufferWO pathIndexToPixel = IntBufferWO(pc.pathIdxToPixelAddr);
+
+                pathRays.data[rayIndex] = pathRay;
+                pathIndexToPixel.data[rayIndex] = pixel;
+                decreases.data[pixel] *= vec4(weight, 1.0f);
+            }
+        }
+    }
+    
 }

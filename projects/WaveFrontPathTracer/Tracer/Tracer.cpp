@@ -82,9 +82,8 @@ float Tracer::reorderRays(RayBuffer& rays) {
     pc.rayIndexAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getIndexBuffer().buffer);
 	pc.inRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
 	pc.outRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getOutRayBuffer().buffer);
-	pc.inSlotToIndexAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getSlotToIndexBuffer().buffer);
-	pc.outSlotToIndexAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getOutSlotToIndexBuffer().buffer);
-	pc.outIndexToSlotAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getOutIndexToSlotBuffer().buffer);
+	pc.inIndexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getIndexToPixelBuffer().buffer);
+	pc.outIndexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getOutIndexToPixelBuffer().buffer);
 	pc.numberOfRays = rays.getSize();
 
     rays.swap();

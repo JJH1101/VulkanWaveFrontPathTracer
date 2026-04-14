@@ -1,8 +1,11 @@
 #version 460
+#extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 #define THREADBLOCK_SIZE 256
+
+#include "bufferReferences.glsl"
 
 uint tea(uint val0, uint val1, uint rounds) {
     uint v0 = val0;
@@ -18,8 +21,6 @@ uint tea(uint val0, uint val1, uint rounds) {
     return v0;
 }
 
-layout(buffer_reference, std430) writeonly restrict buffer SeedBuffer { uint data[]; };
-
 layout(push_constant) uniform PushConstants {
     uint64_t seedAddr;
     int numberOfPixels;
@@ -31,7 +32,7 @@ layout(local_size_x = THREADBLOCK_SIZE) in;
 void main() {
     const uint taskIndex = gl_GlobalInvocationID.x;
 
-    SeedBuffer seeds = SeedBuffer(pc.seedAddr);
+    UintBufferWO seeds = UintBufferWO(pc.seedAddr);
 
     if (taskIndex < pc.numberOfPixels) {
 

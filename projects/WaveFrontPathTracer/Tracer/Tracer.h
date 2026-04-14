@@ -47,10 +47,9 @@ private:
         uint64_t rayIndexAddr;
         uint64_t inRayAddr;
         uint64_t outRayAddr;
-        uint64_t inSlotToIndexAddr;
-        uint64_t outSlotToIndexAddr;
-        uint64_t outIndexToSlotAddr;
-        int numberOfRays;
+        uint64_t inIndexToPixelAddr;
+        uint64_t outIndexToPixelAddr;
+        uint32_t numberOfRays;
     };
 
     VkDescriptorPool descriptorPoolTrace{ VK_NULL_HANDLE };

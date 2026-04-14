@@ -6,6 +6,10 @@
 * Keep both definitions synchronozed when modifying
 */
 
+#ifndef USE_RAY_BUFFER
+#define USE_RAY_BUFFER
+#endif
+
 struct Ray {
     vec3 origin;
     float tmin;

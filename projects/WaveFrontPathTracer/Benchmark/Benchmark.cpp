@@ -64,7 +64,6 @@ void Benchmark::reset() {
            shadowSortLogs[i].sortTime = 0.0f;
            shadowSortLogs[i].reorderTime = 0.0f;
            shadowSortLogs[i].traceSortTime = 0.0f;
-           shadowSortLogs[i].traceTime = 0.0f;
        }
 
        for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
@@ -73,7 +72,6 @@ void Benchmark::reset() {
            pathSortLogs[i].sortTime = 0.0f;
            pathSortLogs[i].reorderTime = 0.0f;
            pathSortLogs[i].traceSortTime = 0.0f;
-           pathSortLogs[i].traceTime = 0.0f;
        }
    }
 
@@ -171,7 +169,6 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
                     logInfo("SORT TIME         : {:.4f} ms", sortLogs[i].sortTime / benchmarkCycle);
                     logInfo("REORDER TIME      : {:.4f} ms", sortLogs[i].reorderTime / benchmarkCycle);
                     logInfo("TRACE SORT TIME   : {:.4f} ms", sortLogs[i].traceSortTime / benchmarkCycle);
-                    logInfo("TRACE TIME        : {:.4f} ms\n", sortLogs[i].traceTime / benchmarkCycle);
                     logInfo("");
 
                     totalLog += sortLogs[i];
@@ -184,7 +181,6 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
                 logInfo("SORT TIME         : {:.4f} ms", totalLog.sortTime / benchmarkCycle);
                 logInfo("REORDER TIME      : {:.4f} ms", totalLog.reorderTime / benchmarkCycle);
                 logInfo("TRACE SORT TIME   : {:.4f} ms", totalLog.traceSortTime / benchmarkCycle);
-                logInfo("TRACE TIME        : {:.4f} ms\n", totalLog.traceTime / benchmarkCycle);
                 logInfo("--------------------------------------------------");
                 logInfo("==================================================");
                 };

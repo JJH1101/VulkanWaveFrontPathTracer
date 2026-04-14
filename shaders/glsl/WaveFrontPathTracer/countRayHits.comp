@@ -7,9 +7,7 @@
 #define THREADBLOCK_SIZE 256
 
 #include "ray.glsl"
-
-layout(buffer_reference, std430) writeonly restrict buffer RayHitBuffer { uint data; };
-layout(buffer_reference, std430) readonly restrict buffer ResultBuffer { RayResult data[]; };
+#include "bufferReferences.glsl"
 
 layout(push_constant) uniform PushConstants {
     uint64_t rayResultAddr;
@@ -27,8 +25,8 @@ void main() {
     const uint taskIndex = gl_GlobalInvocationID.x;
 
     // Buffer references.
-    ResultBuffer rayResults = ResultBuffer(pc.rayResultAddr);
-    RayHitBuffer rayHits = RayHitBuffer(pc.rayHitAddr);
+    RayResultBufferRO rayResults = RayResultBufferRO(pc.rayResultAddr);
+    Counter rayHits = Counter(pc.rayHitAddr);
 
     uint _rayHits = 0;
     if(taskIndex < pc.numberOfRays && rayResults.data[taskIndex].primitiveId >= 0)

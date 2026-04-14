@@ -1,6 +1,10 @@
 #ifndef _GEOMETRYTYPES_GLSL_
 #define _GEOMETRYTYPES_GLSL_
 
+#ifndef USE_GEOMETRY_BUFFER
+#define USE_GEOMETRY_BUFFER
+#endif
+
 struct Triangle {
 	vec3 normal;
 	vec2 uv;
@@ -11,8 +15,8 @@ struct Geometry {
 	uint64_t indexAddr;
 };
 
-layout(buffer_reference, std430) buffer Vertices { vec4 v[]; };
-layout(buffer_reference, std430) buffer Indices { uint i[]; };
+layout(buffer_reference, std430) readonly restrict buffer Vertices { vec4 v[]; };
+layout(buffer_reference, std430) readonly restrict buffer Indices { uint i[]; };
 
 // This function will unpack our vertex buffer data into a single triangle and calculates uv coordinates
 Triangle unpackTriangle(uint primitiveId, Geometry geometry, vec2 barycentric) {

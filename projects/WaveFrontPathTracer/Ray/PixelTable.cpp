@@ -27,14 +27,7 @@ void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue) {
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &indexToPixel,
         size.x * size.y * sizeof(int));
-    vks::util::resizeDiscardBuffer(
-        device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &pixelToIndex,
-        size.x * size.y * sizeof(int));
     std::vector<int> idxtopos(size.x * size.y);
-    std::vector<int> postoidx(size.x * size.y);
 
     // Smart mode.
     int idx = 0;
@@ -75,7 +68,6 @@ void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue) {
                 int ix = ((inner & 1) >> 0) | ((inner & 4) >> 1) | ((inner & 16) >> 2);
                 int iy = ((inner & 2) >> 1) | ((inner & 8) >> 2) | ((inner & 32) >> 3);
                 int pos = (ty * 8 + iy) * size.x + (tx * 8 + ix);
-                postoidx[pos] = idx;
                 idxtopos[idx++] = pos;
             }
         }
@@ -86,7 +78,6 @@ void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue) {
     for (int px = 0; px < bwidth; px++)
         for (int py = bheight; py < size.y; py++) {
             int pos = px + py * size.x;
-            postoidx[pos] = idx;
             idxtopos[idx++] = pos;
         }
 
@@ -94,33 +85,26 @@ void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue) {
     for (int py = 0; py < size.y; py++)
         for (int px = bwidth; px < size.x; px++) {
             int pos = px + py * size.x;
-            postoidx[pos] = idx;
             idxtopos[idx++] = pos;
         }
 
     // Copy to device buffer
     VkDeviceSize bufferSize = idxtopos.size() * sizeof(int);
-    vks::Buffer stagingIdxToPix, stagingPixToIdx;
+    vks::Buffer stagingIdxToPix;
 
     device.createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         &stagingIdxToPix, bufferSize, idxtopos.data());
-
-    device.createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        &stagingPixToIdx, bufferSize, postoidx.data());
 
     VkCommandBuffer copyCmd = device.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
     VkBufferCopy copyRegion = { 0, 0, bufferSize };
 
     vkCmdCopyBuffer(copyCmd, stagingIdxToPix.buffer, indexToPixel.buffer, 1, &copyRegion);
-    vkCmdCopyBuffer(copyCmd, stagingPixToIdx.buffer, pixelToIndex.buffer, 1, &copyRegion);
 
     device.flushCommandBuffer(copyCmd, queue, true);
 
     stagingIdxToPix.destroy();
-    stagingPixToIdx.destroy();
 
     // Done!
 }
@@ -130,7 +114,6 @@ PixelTable::PixelTable() : size(glm::ivec2(0)) {
 
 PixelTable::~PixelTable() {
     indexToPixel.destroy();
-    pixelToIndex.destroy();
 }
 
 void PixelTable::setSize(const glm::ivec2 & _size, vks::VulkanDevice & device, VkQueue queue) {
@@ -145,8 +128,4 @@ const glm::ivec2 & PixelTable::getSize() {
 
 vks::Buffer & PixelTable::getIndexToPixel() {
     return indexToPixel;
-}
-
-vks::Buffer & PixelTable::getPixelToIndex() {
-    return pixelToIndex;
 }

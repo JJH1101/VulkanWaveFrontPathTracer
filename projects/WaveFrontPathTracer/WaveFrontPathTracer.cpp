@@ -19,7 +19,6 @@ class VulkanExample : public VulkanRaytracingSample
 public:
 
 	glm::vec3 light = glm::vec3(0.f);
-	glm::vec3 backgroundColor = glm::vec3(0.f);
 	float lightRadius = 0.f;
 
 	AccelerationStructure bottomLevelAS{};
@@ -60,7 +59,7 @@ public:
 
 	VulkanExample() : VulkanRaytracingSample()
 	{
-		title = "Wavefront Path Tracing";
+		title = "Vulkan Wavefront Path Tracer";
 
 		enableExtensions();
 
@@ -511,7 +510,12 @@ public:
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue);
 
 		Environment::getInstance()->getVectorValue("Scene.light", light);
-		Environment::getInstance()->getVectorValue("Scene.backgroundcolor", backgroundColor);
+		
+		float lightScale;
+		Environment::getInstance()->getFloatValue("Scene.lightScale", lightScale);
+
+		float maxExtent = std::max({model.dimensions.size.x, model.dimensions.size.y, model.dimensions.size.z});
+		lightRadius = maxExtent * lightScale;
 	}
 
 	void prepare()
@@ -531,8 +535,8 @@ public:
 		if (mode == "benchmark") {
 			benchmark = new Benchmark(&renderer);
 		}
-
-		renderer.setScene(geometryBuffer, model.dimensions.min, model.dimensions.max, light, backgroundColor, topLevelAS.handle);
+		
+		renderer.setScene(geometryBuffer, model.dimensions.min, model.dimensions.max, light, lightRadius, topLevelAS.handle);
 
 		prepared = true;
 	}

@@ -52,22 +52,6 @@ Renderer::RayType Renderer::stringToRayType(const std::string & rayType) {
 }
 
 float Renderer::computeRayHits(RayBuffer& rays) {
-
-    vks::util::resizeDiscardBuffer(
-        *device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &counterDevice,
-        sizeof(uint32_t)
-    );
-    vks::util::resizeDiscardBuffer(
-        *device,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        &counterHost,
-        sizeof(uint32_t)
-    );
-
     vks::util::clearBuffer(*device, queue, &counterDevice);
 
     PushConstantsCountRayHits pc{};
@@ -109,6 +93,7 @@ float Renderer::interpolateColors(int numberOfPixels, vks::Buffer& pixels, vks::
     pc.framePixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, framePixels.buffer);
     pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
     pc.numberOfPixels = numberOfPixels;
+    pc.numberOfSamples = samplesPerPixel;
     pc.frameIndex = frameIndex;
     pc.keyValue = keyValue;
     pc.whitePoint = whitePoint;
@@ -121,98 +106,136 @@ float Renderer::interpolateColors(int numberOfPixels, vks::Buffer& pixels, vks::
     return interpolateColorsPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
-float Renderer::primaryPass(Camera & camera, glm::ivec2 extent, vks::Buffer & pixels) {
-    float traceTime = tracePrimaryRays(camera, extent);
-    float reconstructTime = initDecreases(extent.x * extent.y);
-    reconstructTime += reconstructSmooth(primaryRays, pixels);
-    numberOfPrimaryRays += (extent.x * extent.y);
-    primaryTraceTime += traceTime;
-    return traceTime + reconstructTime;
-}
-
-float Renderer::shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace) {
-    float traceTime = 0.0f;
-    float reconstructTime = 0.0f;
-    int batchDiff = RENDERER_MAX_BATCH_SIZE / numberOfShadowSamples;
-    int batchIndex = 0;
-    int batchBegin;
-    int batchEnd;
-    do {
-        batchBegin = batchIndex;
-        batchEnd = std::min(batchBegin + batchDiff, inRays.getSize());
-        traceTime += traceShadowRays(inRays, batchBegin, batchEnd);
-        reconstructTime += reconstructShadow(inRays, inPixels, outPixels, batchBegin, batchEnd, replace);
-        batchIndex = batchEnd;
-    } while (batchIndex != inRays.getSize());
-    float rayHitsTime = computeRayHits(inRays);
-    numberOfShadowRays += numberOfShadowSamples * numberOfHits;
-    if (mode == "benchmark" && printSortLogs) {
-        shadowSortLogs[bounce + 1].rayCount += numberOfShadowSamples * numberOfHits;
-    }
-    shadowTraceTime += traceTime;
-    return traceTime + reconstructTime + rayHitsTime;
-}
-
-float Renderer::pathPass(vks::Buffer& pixels, RayBuffer& inRays, RayBuffer& outRays) {
-    float traceTime = tracePathRays(inRays, outRays);
-    float reconstructTime = reconstructSmooth(outRays, pixels);
-    pathTraceTime += traceTime;
-    numberOfPathRays += outRays.getSize();
-    return traceTime + reconstructTime;
-}
-
 float Renderer::renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
-    return primaryPass(camera, extent, pixels);
+    float time = raygenPrimary(camera, extent, pass + samplesPerPixel * (frameIndex - 1));
+    float traceTime = tracer.trace(primaryRays);
+    time += traceTime;
+	time += initDecreases(extent.x * extent.y);
+    time += reconstructSmooth(primaryRays, pixels, false);
+
+    numberOfPrimaryRays += (extent.x * extent.y);
+	primaryTraceTime += traceTime;
+
+	return time;
 }
 
 float Renderer::renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
-    vks::util::clearBuffer(*device, queue, &auxPixels);
-    float time = primaryPass(camera, extent, auxPixels);
-    time += shadowPass(primaryRays, auxPixels, pixels, false);
+    float time = raygenPrimary(camera, extent, pass + samplesPerPixel * (frameIndex - 1));
+    float traceTime = tracer.trace(primaryRays);
+    time += traceTime;
+    time += initDecreases(extent.x * extent.y);
+    time += reconstructSmooth(primaryRays, auxPixels);
+
+    numberOfPrimaryRays += (extent.x * extent.y);
+    primaryTraceTime += traceTime;
+    
+    time += computeRayHits(primaryRays);
+
+	traceTime = tracer.trace(shadowRays);
+	time += traceTime;
+	time += reconstructShadow(auxPixels, pixels, false);
+
+    numberOfShadowRays += numberOfHits;
+	shadowTraceTime += traceTime;
+
     return time;
 }
 
 float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
-    vks::util::clearBuffer(*device, queue, &auxPixels);
-    float time = primaryPass(camera, extent, auxPixels);
-    time += shadowPass(primaryRays, auxPixels, pixels, false);
-    pathQueue.init(*device, primaryRays.getSize());
-    for (bounce = 0; bounce < recursionDepth; ++bounce) {
-        vks::util::clearBuffer(*device, queue, &auxPixels);
-        if (bounce > 0)
-            time += pathPass(
-                auxPixels,
-                pathQueue.getInputRays(),
-                pathQueue.getOutputRays()
-            );
-        else
-            time += pathPass(
-                auxPixels,
-                primaryRays,
-                pathQueue.getOutputRays()
-            );
-        if (pathQueue.getOutputRays().getSize() == 0) break;
-        time += shadowPass(pathQueue.getOutputRays(), auxPixels, pixels, false);
-        pathQueue.swap();
+	float time = initDecreases(extent.x * extent.y);
+    time += raygenPrimary(camera, extent, pass + samplesPerPixel * (frameIndex - 1));
+    numberOfPrimaryRays += (extent.x * extent.y);
+
+    for (bounce = 0; bounce <= recursionDepth; ++bounce) {
+		RayBuffer& inRays = bounce == 0 ? primaryRays : pathQueue.getInputRays();
+		
+        float traceTime = 0.0f;
+        if (bounce > 0 && sortPathRays) {
+            if (mode == "benchmark" && printSortLogs) {
+                std::array<float, 4> times{};
+                traceTime = tracer.traceSort(inRays, scene.minPos, scene.maxPos, reorderPathRays, times);
+                pathSortLogs[bounce - 1].rayCount += inRays.getSize();
+                pathSortLogs[bounce - 1].mortonCodesTime += times[0];
+                pathSortLogs[bounce - 1].sortTime += times[1];
+                pathSortLogs[bounce - 1].reorderTime += times[2];
+                pathSortLogs[bounce - 1].traceSortTime += times[3];
+            }
+            else {
+                traceTime = tracer.traceSort(inRays, scene.minPos, scene.maxPos, reorderPathRays);
+            }
+        }
+        else traceTime = tracer.trace(inRays);
+        
+        time += traceTime;
+
+        if (bounce == 0) {
+            primaryTraceTime += traceTime;
+        }
+        else {
+            pathTraceTime += traceTime;
+            numberOfPathRays += inRays.getSize();
+        }
+
+        if (bounce != recursionDepth) {
+            time += reconstructSmooth(inRays, pathQueue.getOutputRays(), auxPixels);
+        }
+        else {
+            time += reconstructSmooth(inRays, auxPixels);
+        }
+
+        time += computeRayHits(inRays);
+
+        if (sortShadowRays) {
+            if (mode == "benchmark" && printSortLogs) {
+                std::array<float, 4> times{};
+                traceTime = tracer.traceSort(shadowRays, scene.minPos, scene.maxPos, reorderShadowRays, times);
+                shadowSortLogs[bounce].rayCount += numberOfHits;
+                shadowSortLogs[bounce].mortonCodesTime += times[0];
+                shadowSortLogs[bounce].sortTime += times[1];
+                shadowSortLogs[bounce].reorderTime += times[2];
+                shadowSortLogs[bounce].traceSortTime += times[3];
+            }
+            else {
+                traceTime = tracer.traceSort(shadowRays, scene.minPos, scene.maxPos, reorderShadowRays);
+            }
+        }
+        else traceTime = tracer.trace(shadowRays);
+        
+        time += traceTime;
+        time += reconstructShadow(auxPixels, pixels, false);
+
+        numberOfShadowRays += numberOfHits;
+        shadowTraceTime += traceTime;
+
+		pathQueue.swap();
     }
+
     return time;
 }
 
-float Renderer::reconstructSmooth(RayBuffer & rays, vks::Buffer & pixels) {
-
-    int numRays = rays.getSize();
+float Renderer::reconstructSmooth(RayBuffer& irays, vks::Buffer& pixels, bool genShadow) {
+    uint32_t numRays = irays.getSize();
+    if (genShadow) {
+        shadowRays.resize(*device, numRays);
+        shadowRays.setClosestHit(false);
+    }
 
     PushConstantsReconstructSmooth pc{};
-    pc.rayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getRayBuffer().buffer);
-    pc.resultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getResultBuffer().buffer);
-    pc.idxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, rays.getSlotToIndexBuffer().buffer);
+    pc.inputRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getRayBuffer().buffer);
+    pc.inputResultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getResultBuffer().buffer);
+    pc.inputIdxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getIndexToPixelBuffer().buffer);
     pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
     pc.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
+    pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
     pc.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, scene.geometries.buffer);
+    pc.shadowRayAddr = genShadow ? vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getRayBuffer().buffer) : 0;
+    pc.shadowIdxToPixelAddr = genShadow ? vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getIndexToPixelBuffer().buffer) : 0;
+    pc.pathRayAddr = 0;
+    pc.pathIdxToPixelAddr = 0;
+    pc.rayCounterAddr = 0;
     pc.light = scene.light;
+    pc.lightRadius = scene.lightRadius;
     pc.numberOfRays = numRays;
-    pc.backgroundColor = scene.backgroundColor;
-    pc.numberOfSamples = numberOfPrimarySamples;
 
     ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsReconstructSmooth), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
@@ -222,88 +245,127 @@ float Renderer::reconstructSmooth(RayBuffer & rays, vks::Buffer & pixels) {
     return reconstructSmoothPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
-float Renderer::reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, int batchBegin, int batchEnd, bool replace) {
+float Renderer::reconstructSmooth(RayBuffer & irays, RayBuffer & orays, vks::Buffer & pixels) {
+
+    uint32_t numRays = irays.getSize();
+	orays.resize(*device, numRays);
+    orays.setClosestHit(true);
+	shadowRays.resize(*device, numRays);
+	shadowRays.setClosestHit(false);
+
+    vks::util::clearBuffer(*device, queue, &counterDevice);
+
+    PushConstantsReconstructSmooth pc{};
+	pc.inputRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getRayBuffer().buffer);
+	pc.inputResultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getResultBuffer().buffer);
+	pc.inputIdxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, irays.getIndexToPixelBuffer().buffer);
+	pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
+	pc.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
+	pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
+	pc.geometryAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, scene.geometries.buffer);
+    pc.shadowRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getRayBuffer().buffer);
+	pc.shadowIdxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getIndexToPixelBuffer().buffer);
+	pc.pathRayAddr =  vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
+	pc.pathIdxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getIndexToPixelBuffer().buffer);
+	pc.rayCounterAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, counterDevice.buffer);
+	pc.light = scene.light;
+	pc.lightRadius = scene.lightRadius;
+	pc.russianRoulette = russianRoulette ? 1 : 0;
+	pc.numberOfRays = numRays;
+
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsReconstructSmooth), &pc };
+    std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
+
+    // Launch
+    ComputePass::DispatchDesc dispatchDesc = { (numRays + workGroupSize - 1) / workGroupSize, 1, 1 };
+    float time = reconstructSmoothPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
+
+    device->copyBuffer(&counterDevice, &counterHost, queue);
+    counterHost.map();
+    uint32_t rayCount = *static_cast<uint32_t*>(counterHost.mapped);
+    counterHost.unmap();
+
+    orays.resize(*device, rayCount);
+	
+    return time;
+}
+
+float Renderer::reconstructShadow(vks::Buffer & inPixels, vks::Buffer & outPixels,  bool replace) {
+	uint32_t numRays = shadowRays.getSize();
 
     PushConstantsReconstructShadow pc{};
-    pc.outputResultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getResultBuffer().buffer);
-    pc.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, inRays.getSlotToIndexBuffer().buffer);
-    pc.indexToSlotAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getIndexToSlotBuffer().buffer);
-    pc.inPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, inPixels.buffer);
-    pc.outPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, outPixels.buffer);
-    pc.batchBegin = batchBegin;
-    pc.batchSize = batchEnd - batchBegin;
-    pc.numberOfSamples = numberOfShadowSamples;
-    pc.replace = replace;
+	pc.outputResultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getResultBuffer().buffer);
+	pc.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getIndexToPixelBuffer().buffer);
+	pc.inPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, inPixels.buffer);
+	pc.outPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, outPixels.buffer);
+	pc.numberOfRays = numRays;
+	pc.replace = replace ? 1 : 0;
 
     ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsReconstructShadow), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
 
     // Launch
-    ComputePass::DispatchDesc dispatchDesc = { ((batchEnd - batchBegin) + workGroupSize - 1) / workGroupSize, 1, 1 };
+    ComputePass::DispatchDesc dispatchDesc = { (numRays + workGroupSize - 1) / workGroupSize, 1, 1 };
     return reconstructShadowPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 
 }
 
-float Renderer::tracePrimaryRays(Camera & camera, glm::ivec2& extent) {
-    float time = raygen.primary(primaryRays, camera, extent, pass + numberOfPrimarySamples * (frameIndex - 1));
+float Renderer::initSeeds(int numberOfPixels, int frameIndex) {
 
-    time += tracer.trace(primaryRays);
+    // Resize seeds.
+    vks::util::resizeDiscardBuffer(
+        *device,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &seeds,
+        numberOfPixels * sizeof(uint32_t)
+    );
 
-    return time;
+    // Set push constants
+    PushConstantsInitSeeds pc{};
+    pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
+    pc.numberOfPixels = numberOfPixels;
+    pc.frameIndex = frameIndex;
+
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsInitSeeds), &pc };
+    std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
+
+    // Launch
+    ComputePass::DispatchDesc dispatchDesc = { (numberOfPixels + workGroupSize - 1) / workGroupSize, 1, 1 };
+    return initSeedsPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 }
 
-float Renderer::traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd) {
-    float time = 0.0f;
-    time += raygen.shadow(shadowRays, inRays, batchBegin, batchEnd, numberOfShadowSamples, scene.light, shadowRadius);
-    if (sortShadowRays) {
-        if (mode == "benchmark" && printSortLogs) {
-            std::array<float, 4> times{};
-            float traceTime = tracer.trace(shadowRays);
-            time += tracer.traceSort(shadowRays, scene.minPos, scene.maxPos, reorderShadowRays, times);
-            shadowSortLogs[bounce + 1].mortonCodesTime += times[0];
-            shadowSortLogs[bounce + 1].sortTime += times[1];
-            shadowSortLogs[bounce + 1].reorderTime += times[2];
-            shadowSortLogs[bounce + 1].traceSortTime += times[3];
-            shadowSortLogs[bounce + 1].traceTime += traceTime;
-        }
-        else {
-            time += tracer.traceSort(shadowRays, scene.minPos, scene.maxPos, reorderShadowRays);
-        }
-    }
-    else time += tracer.trace(shadowRays);
-    return time;
-}
+float Renderer::raygenPrimary(Camera& camera, glm::ivec2& extent, int sampleIndex) {
 
-float Renderer::tracePathRays(RayBuffer & inRays, RayBuffer & outRays) {
-    float time = raygen.path(outRays, inRays, decreases, scene.geometries);
-    if (sortPathRays) {
-        if (mode == "benchmark" && printSortLogs) {
-            std::array<float, 4> times{};
-            float traceTime = tracer.trace(outRays);
-            time += tracer.traceSort(outRays, scene.minPos, scene.maxPos, reorderPathRays, times);
-            pathSortLogs[bounce].rayCount += outRays.getSize();
-            pathSortLogs[bounce].mortonCodesTime += times[0];
-            pathSortLogs[bounce].sortTime += times[1];
-            pathSortLogs[bounce].reorderTime += times[2];
-            pathSortLogs[bounce].traceSortTime += times[3];
-            pathSortLogs[bounce].traceTime += traceTime;
-        }
-        else {
-            time += tracer.traceSort(outRays, scene.minPos, scene.maxPos, reorderPathRays);
-        }
-    }
-    else time += tracer.trace(outRays);
-    return time;
-}
+    // Closest hit.
+    pixelTable.setSize(extent, *device, queue);
+    primaryRays.resize(*device, extent.x * extent.y);
+    primaryRays.setClosestHit(true);
+    primaryRays.getIndexToPixelBuffer() = pixelTable.getIndexToPixel();
 
+    // Set push constants.
+    PushConstantsRaygenPrimary pc{};
+    pc.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, primaryRays.getIndexToPixelBuffer().buffer);
+    pc.rayBufferAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, primaryRays.getRayBuffer().buffer);
+    pc.screenToWorld = glm::inverse(camera.matrices.perspective * camera.matrices.view);
+    pc.origin = camera.position;
+    pc.sampleIndex = sampleIndex;
+    pc.size = extent;
+    pc.maxDist = camera.getFarClip();
+
+    ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsRaygenPrimary), &pc };
+    std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
+
+    // Launch
+    ComputePass::DispatchDesc dispatchDesc = { ((extent.x * extent.y) + workGroupSize - 1) / workGroupSize, 1, 1 };
+    return raygenPrimaryPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
+}
 
 Renderer::Renderer() :
     rayType(PRIMARY_RAYS),
     keyValue(0.4f),
     whitePoint(1.0f),
-    shadowRadius(1.0f),
-    numberOfPrimarySamples(1),
-    numberOfShadowSamples(4),
+    samplesPerPixel(1),
     recursionDepth(3),
     frameIndex(1) {
 }
@@ -322,7 +384,6 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     this->timer = &_timer;
     this->queue = _queue;
 
-    raygen.init(*device, *timer, queue);
     tracer.init(*device, *timer, queue);
 
     // Create interpolateColors pipeline
@@ -350,6 +411,34 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     pipelineContext.pushConstantRanges = { pushConstantRange };
     reconstructShadowPass.createPipeline(*device, pipelineContext);
 
+    // Create initSeeds pipeline
+    pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsInitSeeds) };
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "initSeeds.comp.spv";
+    pipelineContext.pushConstantRanges = { pushConstantRange };
+    initSeedsPass.createPipeline(*device, pipelineContext);
+
+    // Create raygenPrimary pipeline
+    pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsRaygenPrimary) };
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "raygenPrimary.comp.spv";
+    pipelineContext.pushConstantRanges = { pushConstantRange };
+    raygenPrimaryPass.createPipeline(*device, pipelineContext);
+
+	// Create counter buffers
+    vks::util::resizeDiscardBuffer(
+        *device,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &counterDevice,
+        sizeof(uint32_t)
+    );
+    vks::util::resizeDiscardBuffer(
+        *device,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &counterHost,
+        sizeof(uint32_t)
+    );
+
     std::string _rayType;
     Environment::getInstance()->getStringValue("Renderer.rayType", _rayType);
     setRayType(stringToRayType(_rayType));
@@ -360,20 +449,16 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     float _whitePoint;
     Environment::getInstance()->getFloatValue("Renderer.whitePoint", _whitePoint);
     setWhitePoint(_whitePoint);
-    int _numberOfPrimarySamples;
-    Environment::getInstance()->getIntValue("Renderer.numberOfPrimarySamples", _numberOfPrimarySamples);
-    setNumberOfPrimarySamples(_numberOfPrimarySamples);
-    int _numberOfShadowSamples;
-    Environment::getInstance()->getIntValue("Renderer.numberOfShadowSamples", _numberOfShadowSamples);
-    setNumberOfShadowSamples(_numberOfShadowSamples);
-    float _shadowRadius;
-    Environment::getInstance()->getFloatValue("Renderer.shadowRadius", _shadowRadius);
-    setShadowRadius(_shadowRadius);
+    int _samplesPerPixel;
+    Environment::getInstance()->getIntValue("Renderer.samplesPerPixel", _samplesPerPixel);
+    setSamplesPerPixel(_samplesPerPixel);
     int _recursionDepth;
     Environment::getInstance()->getIntValue("Renderer.recursionDepth", _recursionDepth);
     setRecursionDepth(_recursionDepth);
 
 	Environment::getInstance()->getStringValue("Application.mode", mode);
+
+    Environment::getInstance()->getBoolValue("Renderer.russianRoulette", russianRoulette);
 
     Environment::getInstance()->getBoolValue("Renderer.sortShadowRays", sortShadowRays);
     Environment::getInstance()->getBoolValue("Renderer.reorderShadowRays", reorderShadowRays);
@@ -420,43 +505,29 @@ void Renderer::setRayType(RayType rayType) {
     this->rayType = rayType;
 }
 
-float Renderer::getShadowRadius() {
-    return shadowRadius;
+float Renderer::getLightRadius() {
+    return scene.lightRadius;
 }
-void Renderer::setShadowRadius(float shadowRadius) {
-    if (shadowRadius <= 0 || shadowRadius > RENDERER_MAX_RADIUS) {
-        std::cout << "WARN <Renderer> Shadow radius must be in range (0," << RENDERER_MAX_RADIUS << "].\n";
+void Renderer::setLightRadius(float lightRadius) {
+    if (lightRadius <= 0 || lightRadius > RENDERER_MAX_RADIUS) {
+        std::cout << "WARN <Renderer> Light radius must be in range (0," << RENDERER_MAX_RADIUS << "].\n";
     }
     else {
-        this->shadowRadius = shadowRadius;
+        this->scene.lightRadius = lightRadius;
         resetFrameIndex();
     }
 }
 
-int Renderer::getNumberOfPrimarySamples(void) {
-    return numberOfPrimarySamples;
+int Renderer::getSamplesPerPixel(void) {
+    return samplesPerPixel;
 }
 
-void Renderer::setNumberOfPrimarySamples(int numberOfPrimarySamples) {
-    if (numberOfPrimarySamples <= 0 || numberOfPrimarySamples > RENDERER_MAX_SAMPLES) {
+void Renderer::setSamplesPerPixel(int samplesPerPixel) {
+    if (samplesPerPixel <= 0 || samplesPerPixel > RENDERER_MAX_SAMPLES) {
         std::cout << "WARN <Renderer> Number of primary samples must be in range (0," << RENDERER_MAX_SAMPLES << "].\n";
     }
     else {
-        this->numberOfPrimarySamples = numberOfPrimarySamples;
-        resetFrameIndex();
-    }
-}
-
-int Renderer::getNumberOfShadowSamples() {
-    return numberOfShadowSamples;
-}
-
-void Renderer::setNumberOfShadowSamples(int numberOfShadowSamples) {
-    if (numberOfShadowSamples <= 0 || numberOfShadowSamples > RENDERER_MAX_SAMPLES) {
-        std::cout << "WARN <Renderer> Number of shadow samples must be in range (0," << RENDERER_MAX_SAMPLES << "].\n";
-    }
-    else {
-        this->numberOfShadowSamples = numberOfShadowSamples;
+        this->samplesPerPixel = samplesPerPixel;
         resetFrameIndex();
     }
 }
@@ -475,13 +546,12 @@ void Renderer::setRecursionDepth(int recursionDepth) {
     }
 }
 
-
 bool Renderer::getRussianRoulette() {
-    return raygen.getRussianRoulette();
+    return russianRoulette;
 }
 
 void Renderer::setRussianRoulette(bool russianRoulette) {
-    raygen.setRussianRoulette(russianRoulette);
+	this->russianRoulette = russianRoulette;
 }
 
 bool Renderer::getSortShadowRays() {
@@ -520,11 +590,11 @@ bool Renderer::getPrintSortLogs(void) {
 	return printSortLogs;
 }
 
-void Renderer::setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS) {
+void Renderer::setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, float lightRadius, VkAccelerationStructureKHR topLevelAS) {
     setGeometries(geometries);
     setSceneBounds(sceneMinPos, sceneMaxPos);
     setLight(light);
-    setBackgroundColor(backgroundColor);
+    setLightRadius(lightRadius);
     setAccelerationStructure(topLevelAS);
 }
 
@@ -535,10 +605,6 @@ void Renderer::setSceneBounds(glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos) {
 
 void Renderer::setLight(glm::vec3& light) {
     scene.light = light;
-}
-
-void Renderer::setBackgroundColor(glm::vec3& backgroundColor) {
-    scene.backgroundColor = backgroundColor;
 }
 
 void Renderer::setGeometries(vks::Buffer& geometries) {
@@ -600,7 +666,6 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
             shadowSortLogs[i].sortTime = 0.0f;
             shadowSortLogs[i].reorderTime = 0.0f;
             shadowSortLogs[i].traceSortTime = 0.0f;
-            shadowSortLogs[i].traceTime = 0.0f;
         }
 
         for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
@@ -609,18 +674,14 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
             pathSortLogs[i].sortTime = 0.0f;
             pathSortLogs[i].reorderTime = 0.0f;
             pathSortLogs[i].traceSortTime = 0.0f;
-            pathSortLogs[i].traceTime = 0.0f;
         }
-
-        bounce = -1;
     }
 
     // Init seeds.
-    if (rayType == PATH_RAYS || rayType == SHADOW_RAYS)
-        time += raygen.initSeeds(extent.x * extent.y, frameIndex);
+    time += initSeeds(extent.x * extent.y, frameIndex);
 
     // For-each primary ray.
-    for (pass = 0; pass < numberOfPrimarySamples; ++pass) {
+    for (pass = 0; pass < samplesPerPixel; ++pass) {
         if (rayType == PRIMARY_RAYS)
             time += renderPrimary(camera, extent, framePixels);
         else if (rayType == SHADOW_RAYS)
@@ -628,20 +689,6 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
         else if (rayType == PATH_RAYS)
             time += renderPath(camera, extent, framePixels);
     }
-
-    //// Log sort counts.
-    //QString mode;
-    //Environment::getInstance()->getStringValue("Application.mode", mode);
-    //if (mode != "interactive") {
-    //    QString output;
-    //    Environment::getInstance()->getStringValue("Benchmark.output", output);
-    //    QString logDir = "benchmark/" + output;
-    //    if (!QDir(logDir).exists())
-    //        QDir().mkpath(logDir);
-    //    Logger sort(logDir + "/sort_" + output + ".log");
-    //    for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i)
-    //        sort << avgRayCounts[i] << " " << sortTimes[i] << " " << traceSortTimes[i] << " " << traceTimes[i] << "\n";
-    //}
 
     // Interpolate colors.
     time += interpolateColors(extent.x * extent.y, pixels, framePixels);

@@ -27,8 +27,7 @@ private:
     int size;
     vks::Buffer rays[2];        // Ray
     vks::Buffer results;        // RayResult
-    vks::Buffer indexToSlot[2]; // int
-    vks::Buffer slotToIndex[2]; // int
+    vks::Buffer indexToPixel[2]; // int
     vks::Buffer mortonCodes;    // uint32_t
     vks::Buffer indices;        // int
     vks::Buffer spine;          // Radix sort temporary buffer
@@ -60,10 +59,8 @@ public:
     vks::Buffer& getIndexBuffer(void);
     vks::Buffer& getMortonCodeBuffer(void);
     vks::Buffer& getSpineBuffer(void);
-    vks::Buffer& getIndexToSlotBuffer(void);
-    vks::Buffer& getOutIndexToSlotBuffer(void);
-    vks::Buffer& getSlotToIndexBuffer(void);
-    vks::Buffer& getOutSlotToIndexBuffer(void);
+    vks::Buffer& getIndexToPixelBuffer(void);
+    vks::Buffer& getOutIndexToPixelBuffer(void);
 
     friend class HipTracer;
 

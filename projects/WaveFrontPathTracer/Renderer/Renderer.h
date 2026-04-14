@@ -16,14 +16,16 @@
 #pragma once
 
 #include "camera.hpp"
-#include "../Ray/RayGen.h"
+#include "../Ray/RayBuffer.h"
+#include "../Ray/PixelTable.h"
+#include "../Compute/ComputePass.h"
+#include "../Utils/gpuTimer.h"
 #include "../Tracer/Tracer.h"
 
 #define RENDERER_MAX_KEY_VALUE 2.0f
 #define RENDERER_MAX_WHITE_POINT 2.0f
 #define RENDERER_MAX_RADIUS 100.0f
 #define RENDERER_MAX_SAMPLES 1024
-#define RENDERER_MAX_BATCH_SIZE (8 * 1024 * 1024)
 #define RENDERER_MAX_RECURSION_DEPTH 8
 
 struct SortLog {
@@ -32,7 +34,6 @@ struct SortLog {
     float sortTime = 0.0f;
     float reorderTime = 0.0f;
     float traceSortTime = 0.0f;
-    float traceTime = 0.0f;
 
     SortLog& operator+=(const SortLog& rhs) {
         rayCount += rhs.rayCount;
@@ -40,7 +41,6 @@ struct SortLog {
         sortTime += rhs.sortTime;
         reorderTime += rhs.reorderTime;
 		traceSortTime += rhs.traceSortTime;
-        traceTime += rhs.traceTime;
         return *this;
     }
 };
@@ -89,10 +89,28 @@ private:
     VkQueue queue{ VK_NULL_HANDLE };
     GPUTimer* timer = nullptr;
 
+    ComputePass initSeedsPass;
+    ComputePass raygenPrimaryPass;
     ComputePass countRayHitsPass;
     ComputePass interpolateColorsPass;
     ComputePass reconstructSmoothPass;
     ComputePass reconstructShadowPass;
+
+    struct PushConstantsInitSeeds {
+        uint64_t seedAddr;
+        int numberOfPixels;
+        int frameIndex;
+    };
+
+    struct PushConstantsRaygenPrimary {
+        glm::mat4 screenToWorld;
+        uint64_t indexToPixelAddr;
+        uint64_t rayBufferAddr;
+        glm::vec3 origin;
+        int sampleIndex;
+        glm::ivec2 size;
+        float maxDist;
+    };
 
     struct PushConstantsCountRayHits {
         uint64_t rayResultAddr;
@@ -104,58 +122,67 @@ private:
         uint64_t framePixelAddr;
         uint64_t pixelAddr;
         int numberOfPixels;
+        int numberOfSamples;
         int frameIndex;
         float keyValue;
         float whitePoint;
     };
 
     struct PushConstantsReconstructSmooth {
-        uint64_t rayAddr;
-        uint64_t resultAddr;
-        uint64_t idxToPixelAddr;
+        uint64_t inputRayAddr;
+        uint64_t inputResultAddr;
+        uint64_t inputIdxToPixelAddr;
+
         uint64_t pixelAddr;
         uint64_t decreaseAddr;
+        uint64_t seedAddr;
         uint64_t geometryAddr;
 
+        uint64_t shadowRayAddr;
+        uint64_t shadowIdxToPixelAddr;
+
+        uint64_t pathRayAddr;
+        uint64_t pathIdxToPixelAddr;
+
+        uint64_t rayCounterAddr;
+
         glm::vec3 light;
-        int numberOfRays;
-        glm::vec3 backgroundColor;
-        int numberOfSamples;
+        float lightRadius;
+        
+        uint32_t russianRoulette;
+        uint32_t numberOfRays;
     };
 
     struct PushConstantsReconstructShadow {
         uint64_t outputResultAddr;
         uint64_t indexToPixelAddr;
-        uint64_t indexToSlotAddr;
         uint64_t inPixelAddr;
         uint64_t outPixelAddr;
-        int batchBegin;
-        int batchSize;
-        int numberOfSamples;
-        int replace;
+        uint32_t numberOfRays;
+        uint32_t replace;
     };
 
     struct Scene {
         vks::Buffer geometries; // Destroyed outside of renderer class
         glm::vec3 minPos{};
         glm::vec3 maxPos{};
-        glm::vec3 backgroundColor{};
         glm::vec3 light{};
+		float lightRadius{};
     } scene;
 
-    RayGen raygen;
+    PixelTable pixelTable;
     Tracer tracer;
 
     RayType rayType;
     float keyValue;
     float whitePoint;
-    float shadowRadius;
-    int numberOfPrimarySamples;
-    int numberOfShadowSamples;
+    int samplesPerPixel;
     int recursionDepth;
     int numberOfHits;
 
     std::string mode{};
+
+	bool russianRoulette = false;
 
     bool sortShadowRays = false;
 	bool reorderShadowRays = false;
@@ -193,21 +220,17 @@ private:
     float computeRayHits(RayBuffer & rays);
     float initDecreases(int numberOfPixels);
     float interpolateColors(int numberOfPixels, vks::Buffer & pixels, vks::Buffer & framePixels);
+    float initSeeds(int numberOfPixels, int frameIndex = 1);
 
-    float primaryPass(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
-    float shadowPass(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace);
-    float pathPass(vks::Buffer & pixels, RayBuffer & inRays, RayBuffer & outRays);
+    float raygenPrimary(Camera& camera, glm::ivec2& extent, int sampleIndex);
 
     float renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderPath(Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
 
-    float reconstructSmooth(RayBuffer& rays, vks::Buffer& pixels);
-    float reconstructShadow(RayBuffer & inRays, vks::Buffer & inPixels, vks::Buffer & outPixels, int batchBegin, int batchEnd, bool replace);
-
-    float tracePrimaryRays(Camera & camera, glm::ivec2& extent);
-    float traceShadowRays(RayBuffer & inRays, int batchBegin, int batchEnd);
-    float tracePathRays(RayBuffer & inRays, RayBuffer & outRays);
+    float reconstructSmooth(RayBuffer& inRays, vks::Buffer& pixels, bool genShadow = true);
+    float reconstructSmooth(RayBuffer& inRays, RayBuffer& outRays, vks::Buffer& pixels);
+    float reconstructShadow(vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace = false);
 
 public:
 
@@ -222,12 +245,10 @@ public:
     float getKeyValue(void);
     void setWhitePoint(float whitePoint);
     float getWhitePoint(void);
-    float getShadowRadius(void);
-    void setShadowRadius(float shadowRadius);
-    int getNumberOfPrimarySamples(void);
-    void setNumberOfPrimarySamples(int numberOfPrimarySamples);
-    int getNumberOfShadowSamples(void);
-    void setNumberOfShadowSamples(int numberOfShadowSamples);
+    float getLightRadius(void);
+    void setLightRadius(float lightRadius);
+    int getSamplesPerPixel(void);
+    void setSamplesPerPixel(int samplesPerPixel);
     int getRecursionDepth(void);
     void setRecursionDepth(int recursionDepth);
     bool getRussianRoulette(void);
@@ -245,10 +266,9 @@ public:
 
 	bool getPrintSortLogs(void);
 
-    void setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, glm::vec3& backgroundColor, VkAccelerationStructureKHR topLevelAS);
+    void setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, float lightRadius, VkAccelerationStructureKHR topLevelAS);
     void setSceneBounds(glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos);
     void setLight(glm::vec3& light);
-    void setBackgroundColor(glm::vec3& backgroundColor);
     void setGeometries(vks::Buffer& geometries);
     void setAccelerationStructure(VkAccelerationStructureKHR topLevelAS);
 

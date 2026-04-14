@@ -7,10 +7,7 @@
 #define THREADBLOCK_SIZE 256
 
 #include "ray.glsl"
-
-layout(buffer_reference, std430) readonly restrict buffer RayBuffer { Ray data[]; };
-layout(buffer_reference, std430) readonly restrict buffer IndexBuffer { uint data[]; };
-layout(buffer_reference, std430) writeonly restrict buffer RayResultBuffer { RayResult data[]; };
+#include "bufferReferences.glsl"
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
@@ -30,8 +27,8 @@ void main() {
     uint rayIndex = gl_GlobalInvocationID.x;
 
     // Buffer references.
-    RayBuffer rays = RayBuffer(pc.rayBufferAddr);
-    RayResultBuffer results = RayResultBuffer(pc.resultBufferAddr);
+    RayBufferRO rays = RayBufferRO(pc.rayBufferAddr);
+    RayResultBufferWO results = RayResultBufferWO(pc.resultBufferAddr);
 
     uint rayFlags = gl_RayFlagsOpaqueEXT;
     if(pc.isClosestHit == 0) rayFlags |= gl_RayFlagsTerminateOnFirstHitEXT;
@@ -41,7 +38,7 @@ void main() {
         
         // Ray index.
         rayIndex = (pc.rayIndexBufferAddr != 0) ? 
-                    IndexBuffer(pc.rayIndexBufferAddr).data[rayIndex] : rayIndex;
+                    UintBufferRO(pc.rayIndexBufferAddr).data[rayIndex] : rayIndex;
 
         // Input ray.
         Ray ray = rays.data[rayIndex];
