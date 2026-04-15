@@ -16,6 +16,8 @@
 #pragma once
 
 #include "camera.hpp"
+#include "VulkanglTFModel.h"
+
 #include "../Ray/RayBuffer.h"
 #include "../Ray/PixelTable.h"
 #include "../Compute/ComputePass.h"
@@ -136,7 +138,7 @@ private:
         uint64_t pixelAddr;
         uint64_t decreaseAddr;
         uint64_t seedAddr;
-        uint64_t geometryAddr;
+        uint64_t geometryNodeAddr;
 
         uint64_t shadowRayAddr;
         uint64_t shadowIdxToPixelAddr;
@@ -162,13 +164,30 @@ private:
         uint32_t replace;
     };
 
-    struct Scene {
-        vks::Buffer geometries; // Destroyed outside of renderer class
-        glm::vec3 minPos{};
-        glm::vec3 maxPos{};
-        glm::vec3 light{};
-		float lightRadius{};
-    } scene;
+    VkDescriptorPool descriptorPool{ VK_NULL_HANDLE };
+    VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
+    VkDescriptorSet descriptorSet{ VK_NULL_HANDLE };
+
+    struct GeometryNode {
+        glm::vec4 baseColorFactor;
+        uint64_t vertexBufferDeviceAddress;
+        uint64_t indexBufferDeviceAddress;
+        int32_t textureIndexBaseColor;
+        int32_t textureIndexNormal;
+        int32_t textureIndexMetallicRoughness;
+        int32_t textureIndexEmissive;
+        float metallicFactor;
+        float roughnessFactor;
+        float _padding0;
+		float _padding1;
+    };
+    vks::Buffer geometryNodes;
+
+    glm::vec3 light;
+	float lightRadius;
+
+	glm::vec3 sceneMinPos;
+	glm::vec3 sceneMaxPos;
 
     PixelTable pixelTable;
     Tracer tracer;
@@ -190,6 +209,8 @@ private:
 	bool reorderPathRays = false;
 
     bool printSortLogs = false;
+
+    bool headlight = false;
 
 	SortLog shadowSortLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
 	SortLog pathSortLogs[RENDERER_MAX_RECURSION_DEPTH];
@@ -232,12 +253,15 @@ private:
     float reconstructSmooth(RayBuffer& inRays, RayBuffer& outRays, vks::Buffer& pixels);
     float reconstructShadow(vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace = false);
 
+    void createDescriptorSet(vkglTF::Model& model);
+	void createGeometryNodeBuffer(vkglTF::Model& model);
+
 public:
 
     Renderer(void);
     ~Renderer(void);
 
-    void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer);
+    void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer, vkglTF::Model& model);
 
     RayType getRayType(void);
     void setRayType(RayType rayType);
@@ -266,10 +290,6 @@ public:
 
 	bool getPrintSortLogs(void);
 
-    void setScene(vks::Buffer& geometries, glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos, glm::vec3& light, float lightRadius, VkAccelerationStructureKHR topLevelAS);
-    void setSceneBounds(glm::vec3& sceneMinPos, glm::vec3& sceneMaxPos);
-    void setLight(glm::vec3& light);
-    void setGeometries(vks::Buffer& geometries);
     void setAccelerationStructure(VkAccelerationStructureKHR topLevelAS);
 
     float render(Camera & camera, glm::ivec2 extent, vks::Buffer & pixels, vks::Buffer & framePixels);

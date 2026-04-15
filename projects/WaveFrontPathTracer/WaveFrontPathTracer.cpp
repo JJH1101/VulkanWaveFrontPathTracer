@@ -17,20 +17,10 @@
 class VulkanExample : public VulkanRaytracingSample
 {
 public:
-
-	glm::vec3 light = glm::vec3(0.f);
-	float lightRadius = 0.f;
-
 	AccelerationStructure bottomLevelAS{};
 	AccelerationStructure topLevelAS{};
 
 	vks::Buffer transformBuffer;
-
-	struct Geometry {
-		uint64_t vertexBufferDeviceAddress;
-		uint64_t indexBufferDeviceAddress;
-	};
-	vks::Buffer geometryBuffer;
 
 	vks::Buffer pixels;
 	vks::Buffer framePixels;
@@ -42,8 +32,8 @@ public:
 	}pcPresent;
 
 	ComputePass presentPass;
-	VkDescriptorSetLayout descriptorSetLayoutPresent{ VK_NULL_HANDLE };
-	std::vector<VkDescriptorSet> descriptorSetsPresent;
+	VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
+	std::vector<VkDescriptorSet> descriptorSets;
 
 	Renderer renderer;
 	GPUTimer timer;
@@ -103,10 +93,9 @@ public:
 	~VulkanExample()
 	{
 		if (device) {
-			vkDestroyDescriptorSetLayout(device, descriptorSetLayoutPresent, nullptr);
+			vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 			deleteAccelerationStructure(bottomLevelAS);
 			deleteAccelerationStructure(topLevelAS);
-			geometryBuffer.destroy();
 			pixels.destroy();
 			framePixels.destroy();
 			transformBuffer.destroy();
@@ -119,7 +108,7 @@ public:
 
 	void createPresentPass() {
 		uint32_t imageCount = swapChain.imageCount;
-		descriptorSetsPresent.resize(imageCount);
+		descriptorSets.resize(imageCount);
 
 		// Create descriptor set
 		VkDescriptorPoolSize poolSize = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, imageCount };
@@ -141,16 +130,16 @@ public:
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 		descriptorSetLayoutInfo.bindingCount = 1;
 		descriptorSetLayoutInfo.pBindings = &binding;
-		vkCreateDescriptorSetLayout(device, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayoutPresent);
+		vkCreateDescriptorSetLayout(device, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout);
 
 		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo{};
 		descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		descriptorSetAllocateInfo.descriptorPool = descriptorPool;
-		descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayoutPresent;
+		descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
 		descriptorSetAllocateInfo.descriptorSetCount = 1;
 
 		for (auto i = 0; i < imageCount; i++) {
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSetsPresent[i]));
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSets[i]));
 
 			// Write descriptor set
 			VkDescriptorImageInfo descriptorImageInfo =  { VK_NULL_HANDLE, swapChain.imageViews[i], VK_IMAGE_LAYOUT_GENERAL};
@@ -158,7 +147,7 @@ public:
 			VkWriteDescriptorSet accelerationStructureWrite{};
 			accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			accelerationStructureWrite.pImageInfo = &descriptorImageInfo;
-			accelerationStructureWrite.dstSet = descriptorSetsPresent[i];
+			accelerationStructureWrite.dstSet = descriptorSets[i];
 			accelerationStructureWrite.dstBinding = 0;
 			accelerationStructureWrite.descriptorCount = 1;
 			accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -170,7 +159,7 @@ public:
 		ComputePass::PipelineContext pipelineContext;
 		pipelineContext.shaderEntry.filePath = getShadersPath() + "WaveFrontPathTracer/present.comp.spv";
 		pipelineContext.pushConstantRanges = { pushConstantRange };
-		pipelineContext.descriptorSetLayouts = { descriptorSetLayoutPresent };
+		pipelineContext.descriptorSetLayouts = { descriptorSetLayout };
 		presentPass.createPipeline(*vulkanDevice, pipelineContext);
 	}
 
@@ -229,7 +218,6 @@ public:
 		std::vector<VkAccelerationStructureGeometryKHR> geometries{};
 		std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRangeInfos{};
 		std::vector<VkAccelerationStructureBuildRangeInfoKHR*> pBuildRangeInfos{};
-		std::vector<Geometry> geomInfos{};
 		for (auto node : model.linearNodes) {
 			if (node->mesh) {
 				for (auto primitive : node->mesh->primitives) {
@@ -240,7 +228,7 @@ public:
 
 						vertexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(model.vertices.buffer);// +primitive->firstVertex * sizeof(vkglTF::Vertex);
 						indexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(model.indices.buffer) + primitive->firstIndex * sizeof(uint32_t);
-						transformBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(transformBuffer.buffer) + static_cast<uint32_t>(geomInfos.size()) * sizeof(VkTransformMatrixKHR);
+						transformBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(transformBuffer.buffer) + static_cast<uint32_t>(geometries.size()) * sizeof(VkTransformMatrixKHR);
 
 						VkAccelerationStructureGeometryKHR geometry{};
 						geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -263,11 +251,6 @@ public:
 						buildRangeInfo.primitiveCount = primitive->indexCount / 3;
 						buildRangeInfo.transformOffset = 0;
 						buildRangeInfos.push_back(buildRangeInfo);
-
-						Geometry geomInfo{};
-						geomInfo.vertexBufferDeviceAddress = vertexBufferDeviceAddress.deviceAddress;
-						geomInfo.indexBufferDeviceAddress = indexBufferDeviceAddress.deviceAddress;
-						geomInfos.push_back(geomInfo);
 					}
 				}
 			}
@@ -275,25 +258,6 @@ public:
 		for (auto& rangeInfo : buildRangeInfos) {
 			pBuildRangeInfos.push_back(&rangeInfo);
 		}
-
-		vks::Buffer stagingBuffer;
-
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			&stagingBuffer,
-			static_cast<uint32_t>(geomInfos.size()) * sizeof(Geometry),
-			geomInfos.data()));
-
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(
-			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			&geometryBuffer,
-			static_cast<uint32_t>(geomInfos.size()) * sizeof(Geometry)));
-
-		vulkanDevice->copyBuffer(&stagingBuffer, &geometryBuffer, queue);
-
-		stagingBuffer.destroy();
 
 		// Get size info
 		VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo{};
@@ -508,14 +472,6 @@ public:
 		std::string sceneFile;
 		Environment::getInstance()->getStringValue("Scene.filename", sceneFile);
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue);
-
-		Environment::getInstance()->getVectorValue("Scene.light", light);
-		
-		float lightScale;
-		Environment::getInstance()->getFloatValue("Scene.lightScale", lightScale);
-
-		float maxExtent = std::max({model.dimensions.size.x, model.dimensions.size.y, model.dimensions.size.z});
-		lightRadius = maxExtent * lightScale;
 	}
 
 	void prepare()
@@ -530,13 +486,13 @@ public:
 
 		createPresentPass();
 		timer.init(*vulkanDevice);
-		renderer.init(*vulkanDevice, queue, timer);
+		renderer.init(*vulkanDevice, queue, timer, model);
 
 		if (mode == "benchmark") {
 			benchmark = new Benchmark(&renderer);
 		}
 		
-		renderer.setScene(geometryBuffer, model.dimensions.min, model.dimensions.max, light, lightRadius, topLevelAS.handle);
+		renderer.setAccelerationStructure(topLevelAS.handle);
 
 		prepared = true;
 	}
@@ -545,13 +501,6 @@ public:
 	{
 		if (camera.updated) {
 			renderer.resetFrameIndex();
-		}
-
-		bool headlight;
-		Environment::getInstance()->getBoolValue("Scene.headlight", headlight);
-		if (headlight) {
-			light = camera.position;
-			renderer.setLight(light);
 		}
 
 		float time = 0.f;
@@ -591,10 +540,10 @@ public:
 
 		ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsPresent), &pcPresent };
 		std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
-		std::vector<VkDescriptorSet> descriptorSets = { descriptorSetsPresent[currentImageIndex] };
+		std::vector<VkDescriptorSet> descriptorSetDescs = { descriptorSets[currentImageIndex] };
 
 		ComputePass::DispatchDesc dispatchDesc = { (width + 16 - 1) / 16, (height + 16 - 1) / 16, 1 };
-		presentPass.record(cmdBuffer, dispatchDesc, descriptorSets, {}, pushConstantDescs);
+		presentPass.record(cmdBuffer, dispatchDesc, descriptorSetDescs, {}, pushConstantDescs);
 
 		// Swapchain Image Layout Transition.
 		vks::tools::setImageLayout(

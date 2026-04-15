@@ -52,9 +52,9 @@ private:
         uint32_t numberOfRays;
     };
 
-    VkDescriptorPool descriptorPoolTrace{ VK_NULL_HANDLE };
-    VkDescriptorSetLayout descriptorSetLayoutTrace{ VK_NULL_HANDLE };
-    VkDescriptorSet descriptorSetTrace{ VK_NULL_HANDLE };
+    VkDescriptorPool descriptorPool{ VK_NULL_HANDLE };
+    VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
+    VkDescriptorSet descriptorSet{ VK_NULL_HANDLE };
 
     float computeMortonCodes(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos);
     float radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::Buffer& storageBuffer, int size);

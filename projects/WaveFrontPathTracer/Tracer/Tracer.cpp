@@ -15,8 +15,8 @@ Tracer::Tracer() {
 }
 
 Tracer::~Tracer() {
-    vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayoutTrace, nullptr);
-    vkDestroyDescriptorPool(device->logicalDevice, descriptorPoolTrace, nullptr);
+    vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
 }
 
 float Tracer::computeMortonCodes(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos) {
@@ -112,7 +112,7 @@ void Tracer::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
     descriptorPoolInfo.poolSizeCount = 1;
     descriptorPoolInfo.pPoolSizes = &poolSize;
     descriptorPoolInfo.maxSets = 1;
-    VK_CHECK_RESULT(vkCreateDescriptorPool(device->logicalDevice, &descriptorPoolInfo, nullptr, &descriptorPoolTrace));
+    VK_CHECK_RESULT(vkCreateDescriptorPool(device->logicalDevice, &descriptorPoolInfo, nullptr, &descriptorPool));
 
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
@@ -124,20 +124,20 @@ void Tracer::init(vks::VulkanDevice& _device, GPUTimer& _timer, VkQueue _queue) 
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
     descriptorSetLayoutInfo.bindingCount = 1;
     descriptorSetLayoutInfo.pBindings = &binding;
-    vkCreateDescriptorSetLayout(device->logicalDevice, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayoutTrace);
+    vkCreateDescriptorSetLayout(device->logicalDevice, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout);
 
     VkDescriptorSetAllocateInfo descriptorSetAllocateInfo{};
     descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptorSetAllocateInfo.descriptorPool = descriptorPoolTrace;
-    descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayoutTrace;
+    descriptorSetAllocateInfo.descriptorPool = descriptorPool;
+    descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
     descriptorSetAllocateInfo.descriptorSetCount = 1;
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(device->logicalDevice, &descriptorSetAllocateInfo, &descriptorSetTrace));
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(device->logicalDevice, &descriptorSetAllocateInfo, &descriptorSet));
 
     // Create trace pipeline
     VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsTrace) };
     ComputePass::PipelineContext pipelineContext;
     pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "trace.comp.spv";
-    pipelineContext.descriptorSetLayouts = { descriptorSetLayoutTrace };
+    pipelineContext.descriptorSetLayouts = { descriptorSetLayout };
     pipelineContext.pushConstantRanges = { pushConstantRange };
     tracePass.createPipeline(*device, pipelineContext);
 
@@ -173,7 +173,7 @@ void Tracer::setAccererationStructure(VkAccelerationStructureKHR topLevelAS) {
     accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     // The specialized acceleration structure descriptor has to be chained
     accelerationStructureWrite.pNext = &descriptorAccelerationStructureInfo;
-    accelerationStructureWrite.dstSet = descriptorSetTrace;
+    accelerationStructureWrite.dstSet = descriptorSet;
     accelerationStructureWrite.dstBinding = 0;
     accelerationStructureWrite.descriptorCount = 1;
     accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
@@ -194,7 +194,7 @@ float Tracer::trace(RayBuffer& rays, bool indirectIndexing) {
 
     ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsTrace), &pc };
     std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
-    std::vector<VkDescriptorSet> descriptorSets = { descriptorSetTrace };
+    std::vector<VkDescriptorSet> descriptorSets = { descriptorSet };
 
     // Launch
     ComputePass::DispatchDesc dispatchDesc = { (numRays + workGroupSize - 1) / workGroupSize, 1, 1 };

@@ -10,7 +10,7 @@ layout(buffer_reference, std430) writeonly restrict buffer RayResultBufferWO { R
 #endif
 
 #ifdef USE_GEOMETRY_BUFFER
-layout(buffer_reference, std430) readonly restrict buffer GeometryBufferRO { Geometry data[]; };
+layout(buffer_reference, std430) readonly restrict buffer GeometryNodeBuffer { GeometryNode data[]; };
 #endif
 
 layout(buffer_reference, std430) readonly restrict buffer IntBufferRO { int data[]; };

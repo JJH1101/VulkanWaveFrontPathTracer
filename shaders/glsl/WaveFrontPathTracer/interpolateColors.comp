@@ -78,25 +78,27 @@ void main() {
     Vec4BufferRW pixels = Vec4BufferRW(pc.pixelAddr);
 
     if (taskIndex < pc.numberOfPixels) {
+        vec3 currentFrameColor = framePixels.data[taskIndex].rgb / float(pc.numberOfSamples);
+        vec3 accumulatedColor;
 
-       // Interpolate color according to the frame index.
-       if (pc.frameIndex > 1) {
-            vec3 color0 = vec3(pixels.data[taskIndex]);
-            vec3 color1 = vec3(framePixels.data[taskIndex]) / float(pc.numberOfSamples);
-            float a = 1.0f / float(pc.frameIndex);
-            float b = a * (float(pc.frameIndex) - 1.0f);
-            vec3 color = a * color1 + b * color0;
-            pixels.data[taskIndex] = vec4(color, 1.0f);
-            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
-        }
+        // Interpolate color according to the frame index.
+        if (pc.frameIndex > 1) {
+            vec3 oldColor = pixels.data[taskIndex].rgb;
+            accumulatedColor = mix(oldColor, currentFrameColor, 1.0f / float(pc.frameIndex));
+        } 
 
         // First frame => Just assign the color.
         else {
-            vec4 color = framePixels.data[taskIndex] / float(pc.numberOfSamples);
-            pixels.data[taskIndex] = color;
-            framePixels.data[taskIndex] = vec4(toneMappingReinhard(vec3(color), pc.keyValue, pc.whitePoint), 1.0f);
+            accumulatedColor = currentFrameColor;
         }
 
+        pixels.data[taskIndex] = vec4(accumulatedColor, 1.0f);
+
+        // Tone mapping and gamma correction.
+        accumulatedColor = toneMappingReinhard(accumulatedColor, pc.keyValue, pc.whitePoint);
+        accumulatedColor = pow(accumulatedColor, vec3(1.0f / 2.2f));
+
+        framePixels.data[taskIndex] = vec4(accumulatedColor, 1.0f);
     }
 
 }
