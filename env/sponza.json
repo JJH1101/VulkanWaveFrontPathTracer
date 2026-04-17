@@ -1,6 +1,6 @@
 {
   "Application": {
-    "mode": "benchmark"
+    "mode": "interactive"
   },
   "Benchmark": {
     "printSortLogs": true
@@ -10,24 +10,22 @@
     "height": 720
   },
   "Scene": {
-    "filename": "models/Sponza_geometry/Sponza_geometry.gltf",
+    "filename": "models/Sponza/Sponza.gltf",
     "light": "0.0 10.0 0.0",
-    "backgroundcolor": "0.529 0.808 0.98",
+    "lightScale": 0.05,
     "headlight": false
   },
   "Renderer": {
-    "numberOfPrimarySamples": 1,
-    "numberOfShadowSamples": 2,
-    "shadowRadius": 1.0,
+    "samplesPerPixel": 1,
     "rayType": "path",
     "recursionDepth": 4,
     "keyValue": 0.6,
     "whitePoint": 2.0,
     "russianRoulette": false,
-    "sortShadowRays": true,
-    "reorderShadowRays": true,
-    "sortPathRays": true,
-    "reorderPathRays": true
+    "sortShadowRays": false,
+    "reorderShadowRays": false,
+    "sortPathRays": false,
+    "reorderPathRays": false
   },
   "Camera": {
     "position": "-9.532621 5.238951 0.979480",

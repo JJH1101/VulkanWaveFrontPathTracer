@@ -1,6 +1,6 @@
 {
   "Application": {
-    "mode": "benchmark"
+    "mode": "interactive"
   },
   "Benchmark": {
     "printSortLogs": true
@@ -10,24 +10,22 @@
     "height": 720
   },
   "Scene": {
-    "filename": "models/BistroExterior_geometry/BistroExterior_geometry.gltf",
-    "light": "0.0 10.0 0.0",
-    "backgroundcolor": "0.529 0.808 0.98",
-    "headlight": true
+    "filename": "models/BistroExterior/BistroExterior.gltf",
+    "light": "25.0 100.0 5.0",
+    "lightScale": 0.05,
+    "headlight": false
   },
   "Renderer": {
-    "numberOfPrimarySamples": 1,
-    "numberOfShadowSamples": 2,
-    "shadowRadius": 1.0,
+    "samplesPerPixel": 1,
     "rayType": "path",
     "recursionDepth": 4,
     "keyValue": 0.6,
     "whitePoint": 2.0,
     "russianRoulette": false,
-    "sortShadowRays": true,
-    "reorderShadowRays": true,
-    "sortPathRays": true,
-    "reorderPathRays": true
+    "sortShadowRays": false,
+    "reorderShadowRays": false,
+    "sortPathRays": false,
+    "reorderPathRays": false
   },
   "Camera": {
     "position": "-21.893288 6.842527 -2.459376",

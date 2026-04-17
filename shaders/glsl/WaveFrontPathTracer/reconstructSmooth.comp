@@ -119,11 +119,6 @@ void main() {
 	        }
 	        aoRoughnessMetallic *= vec3(1.0f, geometryNode.roughnessFactor, geometryNode.metallicFactor);
 
-            // Emission.
-            if (nonuniformEXT(geometryNode.textureIndexEmissive) > -1){
-		        color += texture(textures[nonuniformEXT(geometryNode.textureIndexEmissive)], tri.uv).rgb;
-	        }
-
             // Hit position.
             vec3 hitPos = inputRay.origin + inputRay.direction * inputResult.t;
 
@@ -134,12 +129,14 @@ void main() {
             jenkinsMix(hashA, hashB, hashC);
             vec3 offset = vec3(float(hashA) * exp2(-32.0f), float(hashB) * exp2(-32.0f), float(hashC) * exp2(-32.0f));
             
+            const float EPSILON = 1.0e-3f;
+
             // Sample light.
             vec3 lightPos = vec3(0.0f, 0.0f, 0.5f);
             lightPos = fract(lightPos + offset); // Cranley-Patterson
             lightPos = 2.0f * lightPos - 1.0f; // [-1,1]
             vec3 lightDir = (pc.light + pc.lightRadius * lightPos) - hitPos;
-            float lightLength = max(length(lightDir), 0.01f);
+            float lightLength = max(length(lightDir), EPSILON);
             lightDir /= lightLength;
             
             // Direct shading.
@@ -148,22 +145,21 @@ void main() {
             vec3 H = normalize(lightDir - inputRay.direction);
 
             vec3 F0 = mix(vec3(0.04f), tri.color.rgb, aoRoughnessMetallic.b);
-            vec3 F = FresnelSchlick(max(dot(H, -inputRay.direction), 0.0f), F0);
+            vec3 F = FresnelSchlick(max(dot(H, -inputRay.direction), EPSILON), F0);
 
             vec3 specular = ( DistributionGGX(tri.normal, H, aoRoughnessMetallic.g)
 									* GeometrySmith(NdotL, NdotV, aoRoughnessMetallic.g) * F)
-									/ max(4.0f * NdotL * NdotV, 1.0e-3f);
+									/ max(4.0f * NdotL * NdotV, EPSILON);
+            specular = min(specular, vec3(10.0f));
+
             vec3 kD = vec3(1.0f) - F;	// kS = F
 			kD *= 1.0f - aoRoughnessMetallic.b;
             kD *= tri.color.rgb;
 
-            const float lightIntensity = 100.0f;
-            float attenuation = 1.0f / (1.0f + 0.1f * lightLength * lightLength);
-
-            color += decrease * lightIntensity * attenuation * (kD / M_PI + specular) * NdotL;
+            const float lightIntensity = 10.0f;
+            color += decrease * lightIntensity * (kD / M_PI + specular) * NdotL;
 
             // Generate shadow ray.
-            const float EPSILON = 1.0e-3f;
             shadowRay.direction = lightDir;
             shadowRay.origin = hitPos + tri.normal * EPSILON;
             shadowRay.tmin = EPSILON;
@@ -201,16 +197,16 @@ void main() {
                     pathRay.tmin = EPSILON;
                     pathRay.tmax = MAX_FLOAT;
 
+                    // Cosine distributed ray.
+                    if(r2 < pd) {
+                        pathRay.direction = cosineRandomVector(r0, r1, tri.normal);
+                        weight = min(kD / (pd + ps), vec3(1.0f));
+                    }
                     // Glossy distributed ray.
-                    if(r2 >= pd) {
+                    else {
                         H = sampleGGX(r0, r1, tri.normal, aoRoughnessMetallic.g);
                         pathRay.direction = reflect(inputRay.direction, H);
-                        weight = F / (pd + ps);
-                    }
-                    // Cosine distributed ray.
-                    else {
-                        pathRay.direction = cosineRandomVector(r0, r1, tri.normal);
-                        weight = kD / (pd + ps);
+                        weight = min(F / (pd + ps), vec3(1.0f));
                     }
 
                     generatePathRay = true;
