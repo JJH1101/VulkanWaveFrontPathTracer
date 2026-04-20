@@ -1,6 +1,7 @@
 #pragma once
 #include "VulkanTools.h"
 #include "vulkan/vulkan.h"
+#include <limits>
 #include <vector>
 
 #define MEASURE_MODE 1
@@ -62,7 +63,7 @@ public:
 	}
 
 	/**
-	 * @return -FLT_MAX if timer not ready
+	 * @return -float max if timer not ready
 	 */
 	const std::vector<float>& timerResult()
 	{
@@ -77,7 +78,7 @@ public:
 			if (timeStampResults[i * 4 + 1] && timeStampResults[i * 4 + 3])
 				timerResults[i] = float(timeStampResults[i * 4 + 2] - timeStampResults[i * 4 + 0]) * timestampPeriodDeviceLimit / (1'000'000.0f);
 			else
-				timerResults[i] = -FLT_MAX;
+				timerResults[i] = -std::numeric_limits<float>::max();
 		}
 #endif
 		return timerResults;
