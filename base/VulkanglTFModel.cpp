@@ -761,7 +761,6 @@ vkglTF::Model::~Model()
 		descriptorSetLayoutImage = VK_NULL_HANDLE;
 	}
 	vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
-	emptyTexture.destroy();
 }
 
 void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
@@ -1009,6 +1008,7 @@ void vkglTF::Model::loadImages(tinygltf::Model &gltfModel, vks::VulkanDevice *de
 	}
 	// Create an empty texture to be used for empty material images
 	createEmptyTexture(transferQueue);
+	if (textures.empty()) textures.push_back(emptyTexture);
 }
 
 void vkglTF::Model::loadMaterials(tinygltf::Model &gltfModel)
