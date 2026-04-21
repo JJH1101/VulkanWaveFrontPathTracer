@@ -25,15 +25,14 @@ public:
 	vks::Buffer pixels;
 	vks::Buffer framePixels;
 
-	struct PushConstantsPresent {
+	struct PushConstants {
 		uint64_t pixelAddr;
-		int width;
-		int height;
-	}pcPresent;
+		uint32_t width;
+		uint32_t height;
+	};
 
-	ComputePass presentPass;
-	VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
-	std::vector<VkDescriptorSet> descriptorSets;
+	VkPipeline pipeline{ VK_NULL_HANDLE };
+	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 
 	Renderer renderer;
 	GPUTimer timer;
@@ -52,6 +51,8 @@ public:
 		title = "Vulkan Wavefront Path Tracer";
 
 		enableExtensions();
+
+		rayQueryOnly = true;
 
 		enabledDeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
@@ -73,8 +74,8 @@ public:
 		int w, h;
 		env->getIntValue("Resolution.width", w);
 		env->getIntValue("Resolution.height", h);
-		width = w;
-		height = h;
+		width = static_cast<uint32_t>(w);
+		height = static_cast<uint32_t>(h);
 
 		glm::vec3 cameraPos, cameraRot;
 		float nearPlane, farPlane, fov;
@@ -93,7 +94,6 @@ public:
 	~VulkanExample()
 	{
 		if (device) {
-			vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 			deleteAccelerationStructure(bottomLevelAS);
 			deleteAccelerationStructure(topLevelAS);
 			pixels.destroy();
@@ -106,61 +106,44 @@ public:
 		}
 	}
 
-	void createPresentPass() {
-		uint32_t imageCount = swapChain.imageCount;
-		descriptorSets.resize(imageCount);
+	void createPipelines() {
+		// Pipeline layout.
+		VkPushConstantRange pushConstantRange = vks::initializers::pushConstantRange(VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PushConstants), 0);
+		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+		pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+		pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+		
+		// Pipelines.
+		VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
+		VkPipelineRasterizationStateCreateInfo rasterizationState = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+		VkPipelineColorBlendAttachmentState blendAttachmentState = vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE);
+		VkPipelineColorBlendStateCreateInfo colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
+		VkPipelineDepthStencilStateCreateInfo depthStencilState = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
+		VkPipelineViewportStateCreateInfo viewportState = vks::initializers::pipelineViewportStateCreateInfo(1, 1, 0);
+		VkPipelineMultisampleStateCreateInfo multisampleState = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
+		std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+		VkPipelineDynamicStateCreateInfo dynamicState = vks::initializers::pipelineDynamicStateCreateInfo(dynamicStateEnables);
+		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
 
-		// Create descriptor set
-		VkDescriptorPoolSize poolSize = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, imageCount };
+		VkGraphicsPipelineCreateInfo pipelineCI = vks::initializers::pipelineCreateInfo(pipelineLayout, renderPass);;
+		pipelineCI.pInputAssemblyState = &inputAssemblyState;
+		pipelineCI.pRasterizationState = &rasterizationState;
+		pipelineCI.pColorBlendState = &colorBlendState;
+		pipelineCI.pMultisampleState = &multisampleState;
+		pipelineCI.pViewportState = &viewportState;
+		pipelineCI.pDepthStencilState = &depthStencilState;
+		pipelineCI.pDynamicState = &dynamicState;
+		pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
+		pipelineCI.pStages = shaderStages.data();
+		VkPipelineVertexInputStateCreateInfo emptyInputState = vks::initializers::pipelineVertexInputStateCreateInfo();
+		pipelineCI.pVertexInputState = &emptyInputState;
 
-		VkDescriptorPoolCreateInfo descriptorPoolInfo{};
-		descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		descriptorPoolInfo.poolSizeCount = 1;
-		descriptorPoolInfo.pPoolSizes = &poolSize;
-		descriptorPoolInfo.maxSets = imageCount;
-		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
+		shaderStages[0] = loadShader(getShadersPath() + "WaveFrontPathTracer/present.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+		shaderStages[1] = loadShader(getShadersPath() + "WaveFrontPathTracer/present.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
-		VkDescriptorSetLayoutBinding binding{};
-		binding.binding = 0;
-		binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		binding.descriptorCount = 1;
-		binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-		descriptorSetLayoutInfo.bindingCount = 1;
-		descriptorSetLayoutInfo.pBindings = &binding;
-		vkCreateDescriptorSetLayout(device, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout);
-
-		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo{};
-		descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		descriptorSetAllocateInfo.descriptorPool = descriptorPool;
-		descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
-		descriptorSetAllocateInfo.descriptorSetCount = 1;
-
-		for (auto i = 0; i < imageCount; i++) {
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSets[i]));
-
-			// Write descriptor set
-			VkDescriptorImageInfo descriptorImageInfo =  { VK_NULL_HANDLE, swapChain.imageViews[i], VK_IMAGE_LAYOUT_GENERAL};
-
-			VkWriteDescriptorSet accelerationStructureWrite{};
-			accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			accelerationStructureWrite.pImageInfo = &descriptorImageInfo;
-			accelerationStructureWrite.dstSet = descriptorSets[i];
-			accelerationStructureWrite.dstBinding = 0;
-			accelerationStructureWrite.descriptorCount = 1;
-			accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-
-			vkUpdateDescriptorSets(device, 1, &accelerationStructureWrite, 0, nullptr);
-		}
-
-		VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsPresent) };
-		ComputePass::PipelineContext pipelineContext;
-		pipelineContext.shaderEntry.filePath = getShadersPath() + "WaveFrontPathTracer/present.comp.spv";
-		pipelineContext.pushConstantRanges = { pushConstantRange };
-		pipelineContext.descriptorSetLayouts = { descriptorSetLayout };
-		presentPass.createPipeline(*vulkanDevice, pipelineContext);
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
 	}
 
 	void createAccelerationStructureBuffer(AccelerationStructure& accelerationStructure, VkAccelerationStructureBuildSizesInfoKHR buildSizeInfo)
@@ -463,7 +446,6 @@ public:
 		// Original Features using VkPhysicalDeviceFeature structure.
 		enabledFeatures.shaderInt64 = VK_TRUE;	// Buffer device address requires the 64-bit integer feature to be enabled
 		enabledFeatures.samplerAnisotropy = VK_TRUE;
-		enabledFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;
 	}
 
 	void loadAssets()
@@ -484,7 +466,8 @@ public:
 		createBottomLevelAccelerationStructure();
 		createTopLevelAccelerationStructure();
 
-		createPresentPass();
+		createPipelines();
+
 		timer.init(*vulkanDevice);
 		renderer.init(*vulkanDevice, queue, timer, model);
 
@@ -516,46 +499,51 @@ public:
 
 	void present()
 	{
-		// Command Buffer.
+		PushConstants pc{
+			.pixelAddr = getBufferDeviceAddress(framePixels.buffer),
+			.width = width,
+			.height = height
+		};
+
 		VkCommandBuffer cmdBuffer = drawCmdBuffers[currentBuffer];
 
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
+		VkClearValue clearValues[2];
+		clearValues[0].color = { { 0.0f, 0.0f, 0.2f, 0.0f } };
+		clearValues[1].depthStencil = { 1.0f, 0 };
+
+		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+		renderPassBeginInfo.renderPass = renderPass;
+		renderPassBeginInfo.renderArea.offset.x = 0;
+		renderPassBeginInfo.renderArea.offset.y = 0;
+		renderPassBeginInfo.renderArea.extent.width = width;
+		renderPassBeginInfo.renderArea.extent.height = height;
+		renderPassBeginInfo.clearValueCount = 2;
+		renderPassBeginInfo.pClearValues = clearValues;
+		renderPassBeginInfo.framebuffer = frameBuffers[currentImageIndex];
+
 		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
 		
-		// Swapchain Image Layout Transition.
-		VkImageSubresourceRange subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+		vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		vks::tools::setImageLayout(
-			cmdBuffer,
-			swapChain.images[currentImageIndex],
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_GENERAL,
-			subresourceRange);
+		VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
+		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 
-		// Launch present pass (copy pixel buffer into swapchain image).
-		pcPresent.pixelAddr = getBufferDeviceAddress(framePixels.buffer);
-		pcPresent.width = width;
-		pcPresent.height = height;
+		VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
+		vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-		ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsPresent), &pcPresent };
-		std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
-		std::vector<VkDescriptorSet> descriptorSetDescs = { descriptorSets[currentImageIndex] };
+		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-		ComputePass::DispatchDesc dispatchDesc = { (width + 16 - 1) / 16, (height + 16 - 1) / 16, 1 };
-		presentPass.record(cmdBuffer, dispatchDesc, descriptorSetDescs, {}, pushConstantDescs);
+		vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pc);
 
-		// Swapchain Image Layout Transition.
-		vks::tools::setImageLayout(
-			cmdBuffer,
-			swapChain.images[currentImageIndex],
-			VK_IMAGE_LAYOUT_GENERAL,
-			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-			subresourceRange);
+		vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
 
 		if (mode == "interactive") {
-			drawUI(cmdBuffer, frameBuffers[currentImageIndex]);
+			VulkanExampleBase::drawUI(cmdBuffer);
 		}
+		
+		vkCmdEndRenderPass(cmdBuffer);
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuffer));
 	}
