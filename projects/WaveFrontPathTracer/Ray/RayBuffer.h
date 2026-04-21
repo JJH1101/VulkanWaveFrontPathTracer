@@ -45,7 +45,7 @@ public:
 
     int getSize(void) const;
     int getCapacity(void) const;
-    void resize(vks::VulkanDevice& device, int n);
+    void resize(vks::VulkanDevice& device, int n, bool isPrimary = false);
     void resizeReorderingBuffers(vks::VulkanDevice& device, bool reorderRays);
 
     bool getClosestHit(void) const;

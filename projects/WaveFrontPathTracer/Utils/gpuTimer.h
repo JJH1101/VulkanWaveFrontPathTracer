@@ -28,7 +28,10 @@ public:
 	~GPUTimer()
 	{
 		if (timeStampQueryPool != VK_NULL_HANDLE)
+		{
 			vkDestroyQueryPool(device, timeStampQueryPool, nullptr);
+			timeStampQueryPool = VK_NULL_HANDLE;
+		}
 	}
 	GPUTimer() {}
 	void init(vks::VulkanDevice& _device, uint32_t queryCount = 2)

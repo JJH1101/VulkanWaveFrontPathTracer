@@ -44,7 +44,7 @@ int RayBuffer::getCapacity() const {
     return capacity;
 }
 
-void RayBuffer::resize(vks::VulkanDevice& device, int size) {
+void RayBuffer::resize(vks::VulkanDevice& device, int size, bool isPrimary) {
     assert(size >= 0);
     if (capacity < size) {
         capacity = size;
@@ -56,7 +56,8 @@ void RayBuffer::resize(vks::VulkanDevice& device, int size) {
 
 		vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &rays[swapIdx], size * sizeof(Ray));
         vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &results, size * sizeof(RayResult));
-        vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToPixel[swapIdx], size * sizeof(int));
+        if (!isPrimary)
+            vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToPixel[swapIdx], size * sizeof(int));
     }
     this->size = size;
 }

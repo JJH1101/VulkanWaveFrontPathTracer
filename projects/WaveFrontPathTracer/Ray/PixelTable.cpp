@@ -113,7 +113,6 @@ PixelTable::PixelTable() : size(glm::ivec2(0)) {
 }
 
 PixelTable::~PixelTable() {
-    indexToPixel.destroy();
 }
 
 void PixelTable::setSize(const glm::ivec2 & _size, vks::VulkanDevice & device, VkQueue queue) {

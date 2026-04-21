@@ -10,7 +10,7 @@ void ComputePass::createPipeline(vks::VulkanDevice& _device, const PipelineConte
 {
 	this->device = &_device;
 
-	// create pipeline layout
+	// Create pipeline layout.
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(pipelineContext.descriptorSetLayouts.data(), static_cast<uint32_t>(pipelineContext.descriptorSetLayouts.size()));
 
 	if (pipelineContext.pushConstantRanges.size() > 0)
@@ -21,19 +21,27 @@ void ComputePass::createPipeline(vks::VulkanDevice& _device, const PipelineConte
 
 	VK_CHECK_RESULT(vkCreatePipelineLayout(device->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
 
+	// Load shader.
+	VkShaderModule shaderModule;
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+	shaderModule = vks::tools::loadShader(androidApp->activity->assetManager, pipelineContext.shaderEntry.filePath.c_str(), device->logicalDevice);
+#else
+	shaderModule = vks::tools::loadShader(pipelineContext.shaderEntry.filePath.c_str(), device->logicalDevice);
+#endif
+
+	// Create pipeline.
 	VkPipelineShaderStageCreateInfo shaderStage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 	shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-	shaderStage.module = vks::tools::loadShader(androidApp->activity->assetManager, pipelineContext.shaderEntry.filePath.c_str(), device->logicalDevice);
-#else
-	shaderStage.module = vks::tools::loadShader(pipelineContext.shaderEntry.filePath.c_str(), device->logicalDevice);
-#endif
+	shaderStage.module = shaderModule;
 	shaderStage.pName = pipelineContext.shaderEntry.entryPoint.c_str();
 	shaderStage.pSpecializationInfo = pipelineContext.shaderEntry.specializationInfo;
 
 	VkComputePipelineCreateInfo computePipelineCI= vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 	computePipelineCI.stage = shaderStage;
 	VK_CHECK_RESULT(vkCreateComputePipelines(device->logicalDevice, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &pipeline));
+
+	// Cleanup shader module after pipeline creation.
+	vkDestroyShaderModule(device->logicalDevice, shaderModule, nullptr);
 }
 
 void ComputePass::record(VkCommandBuffer commandBuffer,
@@ -107,4 +115,17 @@ float ComputePass::launchTimed(GPUTimer& timer,
 	auto timerResults = timer.timerResult();
 
 	return timerResults[0];
+}
+
+void ComputePass::destroy() {
+
+	if (pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(device->logicalDevice, pipeline, nullptr);
+		pipeline = VK_NULL_HANDLE;
+	}
+	if (pipelineLayout != VK_NULL_HANDLE) {
+		vkDestroyPipelineLayout(device->logicalDevice, pipelineLayout, nullptr);
+		pipelineLayout = VK_NULL_HANDLE;
+	}
 }

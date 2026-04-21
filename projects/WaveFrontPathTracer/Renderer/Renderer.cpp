@@ -341,7 +341,7 @@ float Renderer::raygenPrimary(Camera& camera, glm::ivec2& extent, int sampleInde
 
     // Closest hit.
     pixelTable.setSize(extent, *device, queue);
-    primaryRays.resize(*device, extent.x * extent.y);
+    primaryRays.resize(*device, extent.x * extent.y, true);
     primaryRays.setClosestHit(true);
     primaryRays.getIndexToPixelBuffer() = pixelTable.getIndexToPixel();
 
@@ -373,14 +373,22 @@ Renderer::Renderer() :
 }
 
 Renderer::~Renderer() {
+	initSeedsPass.destroy();
+	raygenPrimaryPass.destroy();
+	countRayHitsPass.destroy();
+	interpolateColorsPass.destroy();
+	reconstructSmoothPass.destroy();
+	reconstructShadowPass.destroy();
+
+    vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
+
+	geometryNodes.destroy();
     auxPixels.destroy();
     decreases.destroy();
     seeds.destroy();
     counterDevice.destroy();
     counterHost.destroy();
-
-    vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
 }
 
 void Renderer::createDescriptorSet(vkglTF::Model& model) {

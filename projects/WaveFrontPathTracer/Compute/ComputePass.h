@@ -47,11 +47,9 @@ public:
 	void launch(VkQueue queue, DispatchDesc dispatchDesc, const std::vector<VkDescriptorSet>& descriptorSets = {}, const std::vector<uint32_t>& dynamicOffsets = {}, const std::vector<PushConstantDesc>& pushConstantDescs = {});
 	float launchTimed(GPUTimer& timer, VkQueue queue, DispatchDesc dispatchDesc, const std::vector<VkDescriptorSet>& descriptorSets = {}, const std::vector<uint32_t>& dynamicOffsets = {}, const std::vector<PushConstantDesc>& pushConstantDescs = {});
 
+	void destroy(void);
+
 	ComputePass(void) = default;
 	~ComputePass(void) {
-		if (device) {
-			vkDestroyPipeline(device->logicalDevice, pipeline, nullptr);
-			vkDestroyPipelineLayout(device->logicalDevice, pipelineLayout, nullptr);
-		}
 	}
 };

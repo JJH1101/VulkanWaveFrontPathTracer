@@ -24,7 +24,7 @@ class PixelTable {
 private:
 
     glm::ivec2 size;
-    vks::Buffer indexToPixel; // int
+    vks::Buffer indexToPixel; // int, Managed and destroyed by an external class
 
     void recalculate(vks::VulkanDevice& device, VkQueue queue);
 

@@ -744,7 +744,8 @@ vkglTF::Model::~Model()
 	vkDestroyBuffer(device->logicalDevice, indices.buffer, nullptr);
 	vkFreeMemory(device->logicalDevice, indices.memory, nullptr);
 	for (auto& texture : textures) {
-		texture.destroy();
+		if(texture.image != emptyTexture.image)
+			texture.destroy();
 	}
 	for (auto& node : nodes) {
 		delete node;
@@ -761,6 +762,8 @@ vkglTF::Model::~Model()
 		descriptorSetLayoutImage = VK_NULL_HANDLE;
 	}
 	vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
+
+	emptyTexture.destroy();
 }
 
 void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
