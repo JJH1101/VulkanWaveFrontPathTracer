@@ -56,22 +56,22 @@ void Benchmark::reset() {
    numberOfShadowRays = 0;
    numberOfPathRays = 0;
 
-   if (renderer->getPrintSortLogs()) {
+   if (renderer->getPrintBounceLogs()) {
        // Clear sort counts.
        for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH + 1; ++i) {
-           shadowSortLogs[i].rayCount = 0;
-           shadowSortLogs[i].mortonCodesTime = 0.0f;
-           shadowSortLogs[i].sortTime = 0.0f;
-           shadowSortLogs[i].reorderTime = 0.0f;
-           shadowSortLogs[i].traceSortTime = 0.0f;
+           shadowBounceLogs[i].rayCount = 0;
+           shadowBounceLogs[i].mortonCodesTime = 0.0f;
+           shadowBounceLogs[i].sortTime = 0.0f;
+           shadowBounceLogs[i].reorderTime = 0.0f;
+           shadowBounceLogs[i].traceTime = 0.0f;
        }
 
        for (int i = 0; i < RENDERER_MAX_RECURSION_DEPTH; ++i) {
-           pathSortLogs[i].rayCount = 0;
-           pathSortLogs[i].mortonCodesTime = 0.0f;
-           pathSortLogs[i].sortTime = 0.0f;
-           pathSortLogs[i].reorderTime = 0.0f;
-           pathSortLogs[i].traceSortTime = 0.0f;
+           pathBounceLogs[i].rayCount = 0;
+           pathBounceLogs[i].mortonCodesTime = 0.0f;
+           pathBounceLogs[i].sortTime = 0.0f;
+           pathBounceLogs[i].reorderTime = 0.0f;
+           pathBounceLogs[i].traceTime = 0.0f;
        }
    }
 
@@ -91,7 +91,7 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
 	renderAbsoluteTimeCur = duration.count();
 
     int recursionDepth = renderer->getRecursionDepth();
-	bool printSortLogs = renderer->getPrintSortLogs();
+	bool printBounceLogs = renderer->getPrintBounceLogs();
     
 	if (frameCount >= warmupCycle) {
         renderKernelsTime += renderKernelsTimeCur;
@@ -109,16 +109,16 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
 		numberOfShadowRays += renderer->getNumberOfShadowRays();
 		numberOfPathRays += renderer->getNumberOfPathRays();
 
-        if (printSortLogs) {
-            SortLog* shadowSortLogsCur = renderer->getShadowSortLogs();
-            SortLog* pathSortLogsCur = renderer->getPathSortLogs();
+        if (printBounceLogs) {
+            BounceLog* shadowBounceLogsCur = renderer->getShadowBounceLogs();
+            BounceLog* pathBounceLogsCur = renderer->getPathBounceLogs();
 
             for (int i = 0; i < recursionDepth + 1; ++i) {
-                shadowSortLogs[i] += shadowSortLogsCur[i];
+                shadowBounceLogs[i] += shadowBounceLogsCur[i];
             }
 
             for (int i = 0; i < recursionDepth; ++i) {
-                pathSortLogs[i] += pathSortLogsCur[i];
+                pathBounceLogs[i] += pathBounceLogsCur[i];
             }
         }
 	}
@@ -154,40 +154,48 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
         logInfo("--------------------------------------------------");
         logInfo("==================================================");
 
-        if (printSortLogs) {
-            auto printAndSum = [&](const std::string& label, SortLog sortLogs[], int steps) {
-                SortLog totalLog{};
+        if (printBounceLogs) {
+            auto printAndSum = [&](const std::string& label, BounceLog bounceLogs[], int steps, bool sortRays, bool reorderRays) {
+                BounceLog totalLog{};
 
                 logInfo("==================================================");
                 logInfo("--------------------------------------------------");
                 for (int i = 0; i < steps; i++) {
                     int displayDepth = (label == "PATH") ? i + 1 : i;
 
-                    logInfo("SORT LOG {} AT DEPTH {}", label, displayDepth);
-                    logInfo("RAY COUNTS        : {}", sortLogs[i].rayCount / benchmarkCycle);
-                    logInfo("MORTONCODES TIME  : {:.4f} ms", sortLogs[i].mortonCodesTime / benchmarkCycle);
-                    logInfo("SORT TIME         : {:.4f} ms", sortLogs[i].sortTime / benchmarkCycle);
-                    logInfo("REORDER TIME      : {:.4f} ms", sortLogs[i].reorderTime / benchmarkCycle);
-                    logInfo("TRACE SORT TIME   : {:.4f} ms", sortLogs[i].traceSortTime / benchmarkCycle);
+                    logInfo("BOUNCE LOG {} AT DEPTH {}", label, displayDepth);
+                    logInfo("RAY COUNTS        : {}", bounceLogs[i].rayCount / benchmarkCycle);
+                    if (sortRays) {
+                        logInfo("MORTONCODES TIME  : {:.4f} ms", bounceLogs[i].mortonCodesTime / benchmarkCycle);
+                        logInfo("SORT TIME         : {:.4f} ms", bounceLogs[i].sortTime / benchmarkCycle);
+                        if (reorderRays) {
+                            logInfo("REORDER TIME      : {:.4f} ms", bounceLogs[i].reorderTime / benchmarkCycle);
+                        }
+                    }
+                    logInfo("TRACE TIME        : {:.4f} ms", bounceLogs[i].traceTime / benchmarkCycle);
                     logInfo("");
 
-                    totalLog += sortLogs[i];
+                    totalLog += bounceLogs[i];
                 }
 
                 logInfo("--------------------------------------------------");
-                logInfo("SORT LOG {} TOTAL", label);
+                logInfo("BOUNCE LOG {} TOTAL", label);
                 logInfo("RAY COUNTS        : {}", totalLog.rayCount / benchmarkCycle);
-                logInfo("MORTONCODES TIME  : {:.4f} ms", totalLog.mortonCodesTime / benchmarkCycle);
-                logInfo("SORT TIME         : {:.4f} ms", totalLog.sortTime / benchmarkCycle);
-                logInfo("REORDER TIME      : {:.4f} ms", totalLog.reorderTime / benchmarkCycle);
-                logInfo("TRACE SORT TIME   : {:.4f} ms", totalLog.traceSortTime / benchmarkCycle);
+                if (sortRays) {
+                    logInfo("MORTONCODES TIME  : {:.4f} ms", totalLog.mortonCodesTime / benchmarkCycle);
+                    logInfo("SORT TIME         : {:.4f} ms", totalLog.sortTime / benchmarkCycle);
+                    if (reorderRays) {
+                        logInfo("REORDER TIME      : {:.4f} ms", totalLog.reorderTime / benchmarkCycle);
+                    }
+                }
+                logInfo("TRACE TIME        : {:.4f} ms", totalLog.traceTime / benchmarkCycle);
                 logInfo("--------------------------------------------------");
                 logInfo("==================================================");
                 };
 
-            printAndSum("SHADOW", shadowSortLogs, recursionDepth + 1);
+            printAndSum("SHADOW", shadowBounceLogs, recursionDepth + 1, renderer->getSortShadowRays(), renderer->getReorderShadowRays());
 
-            printAndSum("PATH", pathSortLogs, recursionDepth);
+            printAndSum("PATH", pathBounceLogs, recursionDepth, renderer->getSortPathRays(), renderer->getReorderPathRays());
         }
 
 #ifdef __ANDROID__

@@ -244,3 +244,4 @@ libs/vulkan/*.so
 
 __pycache__**
 *.md
+experiments/

@@ -37,8 +37,8 @@ private:
     uint64_t numberOfShadowRays;
     uint64_t numberOfPathRays;
 
-	SortLog shadowSortLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
-	SortLog pathSortLogs[RENDERER_MAX_RECURSION_DEPTH];
+	BounceLog shadowBounceLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
+    BounceLog pathBounceLogs[RENDERER_MAX_RECURSION_DEPTH];
 
     uint32_t frameCount;
 

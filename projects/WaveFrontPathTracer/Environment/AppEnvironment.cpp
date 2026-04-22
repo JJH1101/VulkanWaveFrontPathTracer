@@ -11,7 +11,7 @@ void AppEnvironment::registerOptions() {
 
     registerOption("Application.mode", "interactive", OPT_STRING);
 
-    registerOption("Benchmark.printSortLogs", "0", OPT_BOOL);
+    registerOption("Benchmark.printBounceLogs", "0", OPT_BOOL);
 
     registerOption("Resolution.width", "1024", OPT_INT);
     registerOption("Resolution.height", "768", OPT_INT);

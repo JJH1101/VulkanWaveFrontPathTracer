@@ -30,19 +30,19 @@
 #define RENDERER_MAX_SAMPLES 1024
 #define RENDERER_MAX_RECURSION_DEPTH 8
 
-struct SortLog {
+struct BounceLog {
     int rayCount = 0;
     float mortonCodesTime = 0.0f;
     float sortTime = 0.0f;
     float reorderTime = 0.0f;
-    float traceSortTime = 0.0f;
+    float traceTime = 0.0f;
 
-    SortLog& operator+=(const SortLog& rhs) {
+    BounceLog& operator+=(const BounceLog& rhs) {
         rayCount += rhs.rayCount;
         mortonCodesTime += rhs.mortonCodesTime;
         sortTime += rhs.sortTime;
         reorderTime += rhs.reorderTime;
-		traceSortTime += rhs.traceSortTime;
+		traceTime += rhs.traceTime;
         return *this;
     }
 };
@@ -208,12 +208,12 @@ private:
     bool sortPathRays = false;
 	bool reorderPathRays = false;
 
-    bool printSortLogs = false;
+    bool printBounceLogs = false;
 
     bool headlight = false;
 
-	SortLog shadowSortLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
-	SortLog pathSortLogs[RENDERER_MAX_RECURSION_DEPTH];
+    BounceLog shadowBounceLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
+    BounceLog pathBounceLogs[RENDERER_MAX_RECURSION_DEPTH];
 
     int pass;
     int bounce;
@@ -248,6 +248,8 @@ private:
     float renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderPath(Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
+
+	float traceRays(RayBuffer& rays, BounceLog* bounceLog = nullptr, bool sortRays = false, bool reorderRays = false);
 
     float reconstructSmooth(RayBuffer& inRays, vks::Buffer& pixels, bool genShadow = true);
     float reconstructSmooth(RayBuffer& inRays, RayBuffer& outRays, vks::Buffer& pixels);
@@ -288,7 +290,7 @@ public:
     bool getReorderPathRays(void);
     void setReorderPathRays(bool reorderPathRays);
 
-	bool getPrintSortLogs(void);
+    bool getPrintBounceLogs(void);
 
     void setAccelerationStructure(VkAccelerationStructureKHR topLevelAS);
 
@@ -311,8 +313,8 @@ public:
     float getPathTracePerformance(void);
     float getTracePerformance(void);
 
-    SortLog* getShadowSortLogs(void);
-    SortLog* getPathSortLogs(void);
+    BounceLog* getShadowBounceLogs(void);
+    BounceLog* getPathBounceLogs(void);
 
 };
 

@@ -3,7 +3,7 @@
     "mode": "interactive"
   },
   "Benchmark": {
-    "printSortLogs": true
+    "printBounceLogs": true
   },
   "Resolution": {
     "width": 1560,
