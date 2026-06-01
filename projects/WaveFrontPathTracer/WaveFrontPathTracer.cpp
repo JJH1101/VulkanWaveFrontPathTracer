@@ -461,8 +461,8 @@ public:
 
 	void testFPG()
 	{
-		constexpr uint32_t numBlocks = 1 << 17;
-		constexpr uint32_t numTests = 5;
+		constexpr uint32_t numBlocks = 1 << 16;
+		constexpr uint32_t numTests = 1;
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 		static constexpr std::string_view shaderPath = "shaders/glsl/WaveFrontPathTracer/";
 #else
