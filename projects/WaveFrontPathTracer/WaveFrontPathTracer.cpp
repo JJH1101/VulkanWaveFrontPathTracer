@@ -459,9 +459,81 @@ public:
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue);
 	}
 
+	void testFPG()
+	{
+		constexpr uint32_t numBlocks = 1 << 16;
+		constexpr uint32_t numTests = 1;
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+		static constexpr std::string_view shaderPath = "shaders/glsl/WaveFrontPathTracer/";
+#else
+		static constexpr std::string_view shaderPath = "./../shaders/glsl/WaveFrontPathTracer/";
+#endif
+
+		vks::Buffer flagBuffer;
+		vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&flagBuffer,
+			numBlocks * sizeof(uint32_t)
+		);
+
+		struct PushConstantsFPG {
+			uint64_t flagBufferAddr;
+		} pc;
+		pc.flagBufferAddr = getBufferDeviceAddress(flagBuffer.buffer);
+
+		ComputePass fpgTestPass;
+		VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsFPG) };
+		ComputePass::PipelineContext pipelineContext;
+		pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "testFPG.comp.spv";
+		pipelineContext.pushConstantRanges = { pushConstantRange };
+		fpgTestPass.createPipeline(*vulkanDevice, pipelineContext);
+
+		ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsFPG), &pc };
+		std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
+		ComputePass::DispatchDesc dispatchDesc = { numBlocks, 1, 1 };
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+        LOGD("Begin FPG test\n");
+#else
+        std::cout << "Begin FPG test\n";
+#endif
+
+        for(uint32_t i = 0; i < numTests; i++) {
+            vks::util::clearBuffer(*vulkanDevice, queue, &flagBuffer);
+			fpgTestPass.launch(queue, dispatchDesc, {}, {}, pushConstantDescs);
+        }
+
+		flagBuffer.map();
+		uint32_t* flags = reinterpret_cast<uint32_t*>(flagBuffer.mapped);
+		uint32_t passedCounts = 0;
+
+		for (uint32_t i = 0; i < numBlocks; i++) {
+			if (flags[i] == 1) {
+				passedCounts++;
+			}
+			else {
+				break;
+			}
+		}
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+		LOGD("Finished FPG test\n");
+		LOGD("Passed blocks: %d / %d\n", passedCounts, numBlocks);
+#else
+		std::cout << "Finished FPG test\n";
+		std::cout << "Passed blocks: " << passedCounts << " / " << numBlocks << "\n";
+#endif
+
+		flagBuffer.unmap();
+		flagBuffer.destroy();
+	}
+
 	void prepare()
 	{
 		VulkanRaytracingSample::prepare();
+
+		testFPG();
 
 		loadAssets();
 
