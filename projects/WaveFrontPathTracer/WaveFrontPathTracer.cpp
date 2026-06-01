@@ -461,8 +461,8 @@ public:
 
 	void testFPG()
 	{
-		constexpr uint32_t numBlocks = 1 << 16;
-		constexpr uint32_t numTests = 1;
+		constexpr uint32_t numBlocks = 1 << 17;
+		constexpr uint32_t numTests = 5;
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 		static constexpr std::string_view shaderPath = "shaders/glsl/WaveFrontPathTracer/";
 #else
@@ -470,17 +470,28 @@ public:
 #endif
 
 		vks::Buffer flagBuffer;
+		vks::Buffer taskCounterBuffer;
 		vulkanDevice->createBuffer(
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 			&flagBuffer,
 			numBlocks * sizeof(uint32_t)
 		);
+		vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			&taskCounterBuffer,
+			sizeof(uint32_t)
+		);
 
 		struct PushConstantsFPG {
 			uint64_t flagBufferAddr;
+			uint64_t taskCounterAddr;
+			uint32_t numBlocks;
 		} pc;
 		pc.flagBufferAddr = getBufferDeviceAddress(flagBuffer.buffer);
+		pc.taskCounterAddr = getBufferDeviceAddress(taskCounterBuffer.buffer);
+		pc.numBlocks = numBlocks;
 
 		ComputePass fpgTestPass;
 		VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsFPG) };
@@ -491,7 +502,7 @@ public:
 
 		ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsFPG), &pc };
 		std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
-		ComputePass::DispatchDesc dispatchDesc = { numBlocks, 1, 1 };
+		ComputePass::DispatchDesc dispatchDesc = { 256, 1, 1 };
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
         LOGD("Begin FPG test\n");
@@ -501,6 +512,7 @@ public:
 
         for(uint32_t i = 0; i < numTests; i++) {
             vks::util::clearBuffer(*vulkanDevice, queue, &flagBuffer);
+            vks::util::clearBuffer(*vulkanDevice, queue, &taskCounterBuffer);
 			fpgTestPass.launch(queue, dispatchDesc, {}, {}, pushConstantDescs);
         }
 
@@ -527,6 +539,7 @@ public:
 
 		flagBuffer.unmap();
 		flagBuffer.destroy();
+		taskCounterBuffer.destroy();
 	}
 
 	void prepare()
