@@ -1,9 +1,21 @@
 {
   "Application": {
-    "mode": "interactive"
+    "mode": "benchmark"
   },
   "Benchmark": {
-    "printBounceLogs": true
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions" : [
+        "-21.893288 6.842527 -2.459376",
+        "8.530025 3.611382 -37.421715",
+        "67.242050 5.168941 26.974543"
+      ],
+      "cameraRotations" : [
+        "-4.600013 -98.299873 0.000000",
+        "5.350060 -1.950029 0.000000",
+        "4.999920 -144.476288 0.000000"
+      ]
+    }
   },
   "Resolution": {
     "width": 1560,

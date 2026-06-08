@@ -14,9 +14,24 @@
 #include "Utils/BufferUtils.h"
 #include "Environment/AppEnvironment.h"
 
-class VulkanExample : public VulkanRaytracingSample
+#if defined(__ANDROID__)
+#include "jni.h"
+
+std::string g_envFile = "default.json";
+
+extern "C" JNIEXPORT void JNICALL
+Java_sogang_graphics_WaveFrontPathTracer_VulkanActivity_setEnvironmentName(JNIEnv* env, jobject thiz, jstring envName) {
+	if (envName == nullptr) return;
+
+	const char* nativeString = env->GetStringUTFChars(envName, nullptr);
+	g_envFile = std::string(nativeString);
+	env->ReleaseStringUTFChars(envName, nativeString);
+}
+#endif
+
+class VulkanExample final : public VulkanRaytracingSample
 {
-public:
+private:
 	AccelerationStructure bottomLevelAS{};
 	AccelerationStructure topLevelAS{};
 
@@ -37,7 +52,12 @@ public:
 	Renderer renderer;
 	GPUTimer timer;
 
-	std::string mode;
+	double renderKernelTimeAccumulator = 0.0;
+	uint32_t renderKernelFPS = 0;
+	uint32_t renderFrameCounter = 0;
+	std::chrono::time_point<std::chrono::high_resolution_clock> lastRenderTimestamp;
+
+	std::string mode = "interactive";
 	Benchmark* benchmark = nullptr;
 
 	vkglTF::Model model;
@@ -45,69 +65,6 @@ public:
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{};
 	VkPhysicalDeviceHostQueryResetFeaturesEXT physicalDeviceHostQueryResetFeatures{};
-
-	VulkanExample() : VulkanRaytracingSample()
-	{
-		title = "Vulkan Wavefront Path Tracer";
-
-		enableExtensions();
-
-		rayQueryOnly = true;
-
-		enabledDeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
-		enabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-		enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
-		enabledDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
-
-		Environment* env = new AppEnvironment();
-		Environment::setInstance(env);
-
-		env->readEnvFile(getEnvPath() + "env.json");
-
-		env->getStringValue("Application.mode", mode);
-
-#if defined(_WIN32)
-		if(mode == "benchmark")
-			setupConsole("Vulkan Wavefront Path Tracer");
-#endif
-
-		int w, h;
-		env->getIntValue("Resolution.width", w);
-		env->getIntValue("Resolution.height", h);
-		width = static_cast<uint32_t>(w);
-		height = static_cast<uint32_t>(h);
-
-		glm::vec3 cameraPos, cameraRot;
-		float nearPlane, farPlane, fov;
-		env->getVectorValue("Camera.position", cameraPos);
-		env->getVectorValue("Camera.rotation", cameraRot);
-		env->getFloatValue("Camera.nearPlane", nearPlane);
-		env->getFloatValue("Camera.farPlane", farPlane);
-		env->getFloatValue("Camera.fieldOfView", fov);
-
-		camera.type = Camera::CameraType::firstperson;
-		camera.setPerspective(fov, (float)width / (float)height, nearPlane, farPlane);
-		camera.setPosition(cameraPos);
-		camera.setRotation(cameraRot);
-	}
-
-	~VulkanExample()
-	{
-		if (device) {
-			vkDestroyPipeline(device, pipeline, nullptr);
-			vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-
-			deleteAccelerationStructure(bottomLevelAS);
-			deleteAccelerationStructure(topLevelAS);
-			pixels.destroy();
-			framePixels.destroy();
-			transformBuffer.destroy();
-		}
-
-		if (benchmark) {
-			delete benchmark;
-		}
-	}
 
 	void createPipelines() {
 		// Pipeline layout.
@@ -459,30 +416,6 @@ public:
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue);
 	}
 
-	void prepare()
-	{
-		VulkanRaytracingSample::prepare();
-
-		loadAssets();
-
-		// Create the acceleration structures used to render the ray traced scene
-		createBottomLevelAccelerationStructure();
-		createTopLevelAccelerationStructure();
-
-		createPipelines();
-
-		timer.init(*vulkanDevice);
-		renderer.init(*vulkanDevice, queue, timer, model);
-
-		if (mode == "benchmark") {
-			benchmark = new Benchmark(&renderer);
-		}
-		
-		renderer.setAccelerationStructure(topLevelAS.handle);
-
-		prepared = true;
-	}
-
 	float draw()
 	{
 		if (camera.updated) {
@@ -542,17 +475,14 @@ public:
 
 		vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
 
-		if (mode == "interactive") {
-			VulkanExampleBase::drawUI(cmdBuffer);
-		}
+		VulkanExampleBase::drawUI(cmdBuffer);
 		
 		vkCmdEndRenderPass(cmdBuffer);
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuffer));
 	}
 
-
-	virtual void render()
+	void render() override final
 	{
 		if (!prepared)
 			return;
@@ -564,11 +494,129 @@ public:
 
 		VulkanExampleBase::prepareFrame();
 		
-		float time = draw();
+		renderKernelTimeAccumulator += draw();
+		renderFrameCounter++;
 
 		present();
 
 		VulkanExampleBase::submitFrame();
+
+		auto now = std::chrono::high_resolution_clock::now();
+		float elapsedMs = std::chrono::duration<double, std::milli>(now - lastRenderTimestamp).count();
+
+		if(elapsedMs >= 1000.0f) {
+			renderKernelFPS = static_cast<uint32_t>((float)renderFrameCounter * (1000.0f / renderKernelTimeAccumulator));
+
+			renderKernelTimeAccumulator = 0.0;
+			renderFrameCounter = 0;
+			lastRenderTimestamp = now;
+		}
+	}
+
+	void OnUpdateUIOverlay(vks::UIOverlay* overlay) override final
+	{
+		ImGui::Text("[Kernels] %.2f ms/frame (%.1d fps)", (1000.0f / renderKernelFPS), renderKernelFPS);
+	}
+
+public:
+	VulkanExample() : VulkanRaytracingSample()
+	{
+		title = "Vulkan Wavefront Path Tracer";
+
+		enableExtensions();
+
+		rayQueryOnly = true;
+
+		enabledDeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+		enabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+		enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+		enabledDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+
+		Environment* env = new AppEnvironment();
+		Environment::setInstance(env);
+
+		std::string envFile;
+#if defined(__ANDROID__)
+		envFile = g_envFile;
+#else
+		if(commandLineParser.isSet("environment")) {
+			envFile = commandLineParser.getValueAsString("environment", "default.json");
+		}
+		else {
+			envFile = "default.json";
+		}
+#endif
+		env->readEnvFile(getEnvPath() + envFile);
+
+		env->getStringValue("Application.mode", mode);
+
+#if defined(_WIN32)
+		if (mode == "benchmark")
+			setupConsole("Vulkan Wavefront Path Tracer");
+#endif
+
+		int w, h;
+		env->getIntValue("Resolution.width", w);
+		env->getIntValue("Resolution.height", h);
+		width = static_cast<uint32_t>(w);
+		height = static_cast<uint32_t>(h);
+
+		glm::vec3 cameraPos, cameraRot;
+		float nearPlane, farPlane, fov;
+		env->getVectorValue("Camera.position", cameraPos);
+		env->getVectorValue("Camera.rotation", cameraRot);
+		env->getFloatValue("Camera.nearPlane", nearPlane);
+		env->getFloatValue("Camera.farPlane", farPlane);
+		env->getFloatValue("Camera.fieldOfView", fov);
+
+		camera.type = Camera::CameraType::firstperson;
+		camera.setPerspective(fov, (float)width / (float)height, nearPlane, farPlane);
+		camera.setPosition(cameraPos);
+		camera.setRotation(cameraRot);
+	}
+
+	~VulkanExample()
+	{
+		if (device) {
+			vkDestroyPipeline(device, pipeline, nullptr);
+			vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
+			deleteAccelerationStructure(bottomLevelAS);
+			deleteAccelerationStructure(topLevelAS);
+			pixels.destroy();
+			framePixels.destroy();
+			transformBuffer.destroy();
+		}
+
+		if (benchmark) {
+			delete benchmark;
+		}
+	}
+
+	void prepare() override final
+	{
+		VulkanRaytracingSample::prepare();
+
+		loadAssets();
+
+		// Create the acceleration structures used to render the ray traced scene
+		createBottomLevelAccelerationStructure();
+		createTopLevelAccelerationStructure();
+
+		createPipelines();
+
+		timer.init(*vulkanDevice);
+		renderer.init(*vulkanDevice, queue, timer, model);
+
+		if (mode == "benchmark") {
+			benchmark = new Benchmark(&renderer);
+		}
+
+		renderer.setAccelerationStructure(topLevelAS.handle);
+
+		lastTimestamp = std::chrono::high_resolution_clock::now();
+
+		prepared = true;
 	}
 };
 

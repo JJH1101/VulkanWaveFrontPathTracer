@@ -21,9 +21,21 @@ public class VulkanActivity extends NativeActivity {
         // Load native library
         System.loadLibrary("native-lib");
     }
+
+    private native void setEnvironmentName(String envName);
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        String envName = "default.json";
+
+        Bundle extras = getIntent().getExtras();
+        if(extras != null && extras.containsKey("env")) {
+            envName = extras.getString("env");
+        }
+
+        setEnvironmentName(envName);
     }
 
     // Use a semaphore to create a modal dialog

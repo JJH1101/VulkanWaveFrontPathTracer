@@ -46,19 +46,19 @@ if (vks::tools::resourcePath != "") {
 const std::string getEnvPath()
 {
 	if (vks::tools::resourcePath != "") {
-		return vks::tools::resourcePath + "/env/";
+		return vks::tools::resourcePath + "/envs/";
 	}
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 #if USE_ANDROID_EXTERNAL_PATH
-	return std::string(androidApp->activity->externalDataPath) + "/env/";
+	return std::string(androidApp->activity->externalDataPath) + "/envs/";
 #else
-	return "env/";
+	return "envs/";
 #endif	// USE_ANDROID_EXTERNAL_PATH
 
 #elif defined(VK_EXAMPLE_ENVIRONMENTS_DIR)
 	return VK_EXAMPLE_ENVIRONMENTS_DIR;
 #else
-	return "./../env/";
+	return "./../envs/";
 #endif
 }
 
