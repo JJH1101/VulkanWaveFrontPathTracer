@@ -8,6 +8,8 @@ set(EXTERNAL_DIR ../../../external)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++2a -DVK_USE_PLATFORM_ANDROID_KHR -DVK_NO_PROTOTYPES")
 
+add_compile_definitions(PROJECT_NAME=\"${NAME}\")
+
 file(GLOB_RECURSE EXAMPLE_SRC "${SRC_DIR}/*.cpp")
 
 add_library(native-lib SHARED ${EXAMPLE_SRC})

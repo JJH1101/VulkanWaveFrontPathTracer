@@ -60,7 +60,8 @@
 }
 #endif
 
-#define USE_ANDROID_EXTERNAL_PATH 1
+#define USE_ANDROID_TMP_PATH 1
+#define ANDROID_TMP_PATH "/data/local/tmp/"
 const std::string getAssetPath();
 const std::string getShaderBasePath();
 const std::string getEnvPath();

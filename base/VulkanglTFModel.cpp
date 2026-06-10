@@ -290,7 +290,7 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 		ktxTexture* ktxTexture;
 
 		ktxResult result = KTX_SUCCESS;
-#if defined(__ANDROID__) && !USE_ANDROID_EXTERNAL_PATH
+#if defined(__ANDROID__) && !USE_ANDROID_TMP_PATH
 		AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
 		if (!asset) {
 			vks::tools::exitFatal("Could not load texture from " + filename + "\n\nMake sure the assets submodule has been checked out and is up-to-date.", -1);
@@ -1195,7 +1195,7 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 
 	this->device = device;
 
-#if defined(__ANDROID__) && !USE_ANDROID_EXTERNAL_PATH
+#if defined(__ANDROID__) && !USE_ANDROID_TMP_PATH
 	// On Android all assets are packed with the apk in a compressed form, so we need to open them using the asset manager
 	// We let tinygltf handle this, by passing the asset manager of our app
 	tinygltf::asset_manager = androidApp->activity->assetManager;
