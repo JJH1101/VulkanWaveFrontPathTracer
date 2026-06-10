@@ -3,24 +3,24 @@
     "mode": "benchmark"
   },
   "Benchmark": {
-    "warmupCyclesPerView": 5,
-    "benchmarkCyclesPerView": 50,
+    "warmupCyclesPerView": 10,
+    "benchmarkCyclesPerView": 100,
     "printBounceLogs": true,
     "views": {
       "cameraPositions" : [
-        "-21.893288 6.842527 -2.459376",
-        "8.530025 3.611382 -37.421715",
-        "67.242050 5.168941 26.974543"
+        "-1.16389 -0.109829 -6.49016",
+        "-5.15899 1.04433 -0.647583",
+        "-1.16741 4.07983 0.960942"
       ],
       "cameraRotations" : [
-        "-4.600013 -98.299873 0.000000",
-        "5.350060 -1.950029 0.000000",
-        "4.999920 -144.476288 0.000000"
+        "0.574912 -169.85 0.0",
+        "-10.4251 -102.85 0.0",
+        "-70.4251 -71.8504 0.0"
       ],
       "lightPositions": [
-        "25.0 100.0 5.0",
-        "25.0 100.0 5.0",
-        "25.0 100.0 5.0"
+        "10.0 15.0 5.0",
+        "10.0 15.0 5.0",
+        "10.0 15.0 5.0"
       ]
     }
   },
@@ -29,8 +29,8 @@
     "height": 720
   },
   "Scene": {
-    "filename": "models/BistroExterior/BistroExterior.gltf",
-    "light": "25.0 100.0 5.0",
+    "filename": "models/hairball/hairball.gltf",
+    "light": "10.0 15.0 5.0",
     "lightScale": 0.05,
     "headlight": false
   },
@@ -47,8 +47,8 @@
     "reorderPathRays": false
   },
   "Camera": {
-    "position": "-21.893288 6.842527 -2.459376",
-    "rotation": "-4.600013 -98.299873 0.000000",
+    "position": "-1.347488 -0.136557 -9.163228",
+    "rotation": "0.574912 -169.850418 0.000000",
     "nearPlane": 0.1,
     "farPlane": 512.0,
     "fieldOfView": 60.0

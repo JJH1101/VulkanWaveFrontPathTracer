@@ -1,9 +1,28 @@
 {
   "Application": {
-    "mode": "interactive"
+    "mode": "benchmark"
   },
   "Benchmark": {
-    "printBounceLogs": true
+    "warmupCyclesPerView": 5,
+    "benchmarkCyclesPerView": 50,
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions" : [
+        "8.287917 3.804885 34.659367",
+        "-1.835380 10.524135 -7.618346",
+        "-0.140185 2.496554 49.772369"
+      ],
+      "cameraRotations" : [
+        "1.075014 -303.599152 0.000000",
+        "-7.449981 207.373123 2.337500",
+        "-1.600079 449.471832 0.000000"
+      ],
+      "lightPositions": [
+        "0.0 12.0 26.0",
+        "0.0 26.0 0.0",
+        "0.0 2.0 58.0"
+      ]
+    }
   },
   "Resolution": {
     "width": 1560,
@@ -13,7 +32,7 @@
     "filename": "models/SunTemple/SunTemple.gltf",
     "light": "0.0 10.0 0.0",
     "lightScale": 0.05,
-    "headlight": true
+    "headlight": false
   },
   "Renderer": {
     "samplesPerPixel": 1,

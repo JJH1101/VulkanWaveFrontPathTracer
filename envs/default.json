@@ -2,9 +2,6 @@
   "Application": {
     "mode": "interactive"
   },
-  "Benchmark": {
-    "printBounceLogs": true
-  },
   "Resolution": {
     "width": 1560,
     "height": 720

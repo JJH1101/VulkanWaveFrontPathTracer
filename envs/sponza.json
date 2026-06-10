@@ -1,9 +1,28 @@
 {
   "Application": {
-    "mode": "interactive"
+    "mode": "benchmark"
   },
   "Benchmark": {
-    "printBounceLogs": true
+    "warmupCyclesPerView": 5,
+    "benchmarkCyclesPerView": 50,
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions" : [
+        "-9.532621 5.238951 0.979480",
+        "-5.558293 2.478523 0.526916",
+        "-7.277143 1.701037 0.526935"
+      ],
+      "cameraRotations" : [
+        "-11.349973 279.949829 0.000000",
+        "0.000116 326.497833 0.000000",
+        "-9.449914 408.997894 0.000000"
+      ],
+      "lightPositions": [
+        "0.0 10.0 0.0",
+        "0.0 10.0 0.0",
+        "0.0 10.0 0.0"
+      ]
+    }
   },
   "Resolution": {
     "width": 1560,

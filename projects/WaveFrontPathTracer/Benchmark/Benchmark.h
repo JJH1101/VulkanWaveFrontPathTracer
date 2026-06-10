@@ -11,12 +11,8 @@
 class Benchmark {
 
 private:
-    static constexpr uint32_t warmupCycle = 10;
-#ifdef __ANDROID__
-    static constexpr uint32_t benchmarkCycle = 100;
-#else
-    static constexpr uint32_t benchmarkCycle = 500;
-#endif
+    int warmupCyclesPerView = 10;
+	int benchmarkCyclesPerView = 100;
 
     Renderer* renderer;
 
@@ -40,7 +36,15 @@ private:
 	BounceLog shadowBounceLogs[RENDERER_MAX_RECURSION_DEPTH + 1];
     BounceLog pathBounceLogs[RENDERER_MAX_RECURSION_DEPTH];
 
-    uint32_t frameCount;
+    int frameCount;
+    int view;
+
+    struct viewInfos {
+		std::vector<glm::vec3> cameraPositions;
+		std::vector<glm::vec3> cameraRotations;
+		std::vector<glm::vec3> lightPositions;
+		int numberOfViews;
+    } views;
 
     void reset(void);
     std::string rayTypeToString(Renderer::RayType rayType);

@@ -12,6 +12,11 @@ void AppEnvironment::registerOptions() {
     registerOption("Application.mode", "interactive", OPT_STRING);
 
     registerOption("Benchmark.printBounceLogs", "0", OPT_BOOL);
+    registerOption("Benchmark.warmupCyclesPerView", "10", OPT_INT);
+    registerOption("Benchmark.benchmarkCyclesPerView", "100", OPT_INT);
+	registerOption("Benchmark.views.cameraPositions", "0.0 0.0 0.0", OPT_VECTOR);
+	registerOption("Benchmark.views.cameraRotations", "0.0 0.0 0.0", OPT_VECTOR);
+	registerOption("Benchmark.views.lightPositions", "0.0 0.0 0.0", OPT_VECTOR);
 
     registerOption("Resolution.width", "1024", OPT_INT);
     registerOption("Resolution.height", "768", OPT_INT);

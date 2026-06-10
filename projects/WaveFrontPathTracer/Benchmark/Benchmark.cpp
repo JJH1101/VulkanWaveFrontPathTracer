@@ -76,10 +76,29 @@ void Benchmark::reset() {
    }
 
    frameCount = 0;
+   view = 0;
 
+   Environment::getInstance()->getIntValue("Benchmark.warmupCyclesPerView", warmupCyclesPerView);
+   Environment::getInstance()->getIntValue("Benchmark.benchmarkCyclesPerView", benchmarkCyclesPerView);
+
+   views.cameraPositions.clear();
+   views.cameraRotations.clear();
+   views.lightPositions.clear();
+
+   Environment::getInstance()->getVectorValues("Benchmark.views.cameraPositions", views.cameraPositions);
+   Environment::getInstance()->getVectorValues("Benchmark.views.cameraRotations", views.cameraRotations);
+   Environment::getInstance()->getVectorValues("Benchmark.views.lightPositions", views.lightPositions);
+
+   views.numberOfViews = std::min({ views.cameraPositions.size(), views.cameraRotations.size(), views.lightPositions.size() });
 }
 
 float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
+
+    if(frameCount == 0) {
+        camera.setPosition(views.cameraPositions[view]);
+        camera.setRotation(views.cameraRotations[view]);
+        renderer->setLightPosition(views.lightPositions[view]);
+	}
 
     float renderKernelsTimeCur;
     float renderAbsoluteTimeCur;
@@ -93,7 +112,7 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
     int recursionDepth = renderer->getRecursionDepth();
 	bool printBounceLogs = renderer->getPrintBounceLogs();
     
-	if (frameCount >= warmupCycle) {
+	if (frameCount >= warmupCyclesPerView) {
         renderKernelsTime += renderKernelsTimeCur;
         renderAbsoluteTime += renderAbsoluteTimeCur;
 		rtPerformance += renderer->getTracePerformance();
@@ -123,87 +142,95 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
         }
 	}
 
-	if (frameCount == warmupCycle + benchmarkCycle - 1) {
-        // Write results.
-        logInfo("==================================================");
-        logInfo(" RAY TRACING BENCHMARK RESULTS ");
-        logInfo("--------------------------------------------------");
-        logInfo(" RAY TYPE                : {}", rayTypeToString(renderer->getRayType()));
-        logInfo("");
-        logInfo(" [Count (Average)]");
-        logInfo(" TOTAL RAYS              : {}", numberOfRays / benchmarkCycle);
-        logInfo(" PRIMARY RAYS            : {}", numberOfPrimaryRays / benchmarkCycle);
-        logInfo(" SHADOW RAYS             : {}", numberOfShadowRays / benchmarkCycle);
-        logInfo(" PATH RAYS               : {}", numberOfPathRays / benchmarkCycle);
-        logInfo("");
-        logInfo(" [Time (ms)]");
-        logInfo(" TRACE TOTAL             : {:.4f} ms", traceTime / benchmarkCycle);
-        logInfo(" TRACE PRIMARY           : {:.4f} ms", traceTimePrimary / benchmarkCycle);
-        logInfo(" TRACE SHADOW            : {:.4f} ms", traceTimeShadow / benchmarkCycle);
-        logInfo(" TRACE PATH              : {:.4f} ms", traceTimePath / benchmarkCycle);
-        logInfo("");
-        logInfo(" [Performance (Mrays/s)]");
-        logInfo(" RT PERF TOTAL           : {:.2f}", rtPerformance / benchmarkCycle);
-        logInfo(" RT PERF PRIMARY         : {:.2f}", rtPerformancePrimary / benchmarkCycle);
-        logInfo(" RT PERF SHADOW          : {:.2f}", rtPerformanceShadow / benchmarkCycle);
-        logInfo(" RT PERF PATH            : {:.2f}", rtPerformancePath / benchmarkCycle);
-        logInfo("");
-        logInfo(" [Overall Time]");
-        logInfo(" RENDER KERNELS          : {:.4f} ms", renderKernelsTime / benchmarkCycle);
-        logInfo(" RENDER ABSOLUTE         : {:.4f} ms", renderAbsoluteTime / benchmarkCycle);
-        logInfo("--------------------------------------------------");
-        logInfo("==================================================");
+	if (frameCount == warmupCyclesPerView + benchmarkCyclesPerView - 1) {
+        if (view == views.numberOfViews - 1) {
+			uint32_t benchmarkCyclesTotal = benchmarkCyclesPerView * views.numberOfViews;
 
-        if (printBounceLogs) {
-            auto printAndSum = [&](const std::string& label, BounceLog bounceLogs[], int steps, bool sortRays, bool reorderRays) {
-                BounceLog totalLog{};
+            // Write results.
+            logInfo("==================================================");
+            logInfo(" RAY TRACING BENCHMARK RESULTS ");
+            logInfo("--------------------------------------------------");
+            logInfo(" RAY TYPE                : {}", rayTypeToString(renderer->getRayType()));
+            logInfo("");
+            logInfo(" [Count (Average)]");
+            logInfo(" TOTAL RAYS              : {}", numberOfRays / benchmarkCyclesTotal);
+            logInfo(" PRIMARY RAYS            : {}", numberOfPrimaryRays / benchmarkCyclesTotal);
+            logInfo(" SHADOW RAYS             : {}", numberOfShadowRays / benchmarkCyclesTotal);
+            logInfo(" PATH RAYS               : {}", numberOfPathRays / benchmarkCyclesTotal);
+            logInfo("");
+            logInfo(" [Time (ms)]");
+            logInfo(" TRACE TOTAL             : {:.4f} ms", traceTime / benchmarkCyclesTotal);
+            logInfo(" TRACE PRIMARY           : {:.4f} ms", traceTimePrimary / benchmarkCyclesTotal);
+            logInfo(" TRACE SHADOW            : {:.4f} ms", traceTimeShadow / benchmarkCyclesTotal);
+            logInfo(" TRACE PATH              : {:.4f} ms", traceTimePath / benchmarkCyclesTotal);
+            logInfo("");
+            logInfo(" [Performance (Mrays/s)]");
+            logInfo(" RT PERF TOTAL           : {:.2f}", rtPerformance / benchmarkCyclesTotal);
+            logInfo(" RT PERF PRIMARY         : {:.2f}", rtPerformancePrimary / benchmarkCyclesTotal);
+            logInfo(" RT PERF SHADOW          : {:.2f}", rtPerformanceShadow / benchmarkCyclesTotal);
+            logInfo(" RT PERF PATH            : {:.2f}", rtPerformancePath / benchmarkCyclesTotal);
+            logInfo("");
+            logInfo(" [Overall Time]");
+            logInfo(" RENDER KERNELS          : {:.4f} ms", renderKernelsTime / benchmarkCyclesTotal);
+            logInfo(" RENDER ABSOLUTE         : {:.4f} ms", renderAbsoluteTime / benchmarkCyclesTotal);
+            logInfo("--------------------------------------------------");
+            logInfo("==================================================");
 
-                logInfo("==================================================");
-                logInfo("--------------------------------------------------");
-                for (int i = 0; i < steps; i++) {
-                    int displayDepth = (label == "PATH") ? i + 1 : i;
+            if (printBounceLogs) {
+                auto printAndSum = [&](const std::string& label, BounceLog bounceLogs[], int steps, bool sortRays, bool reorderRays) {
+                    BounceLog totalLog{};
 
-                    logInfo("BOUNCE LOG {} AT DEPTH {}", label, displayDepth);
-                    logInfo("RAY COUNTS        : {}", bounceLogs[i].rayCount / benchmarkCycle);
+                    logInfo("==================================================");
+                    logInfo("--------------------------------------------------");
+                    for (int i = 0; i < steps; i++) {
+                        int displayDepth = (label == "PATH") ? i + 1 : i;
+
+                        logInfo("BOUNCE LOG {} AT DEPTH {}", label, displayDepth);
+                        logInfo("RAY COUNTS        : {}", bounceLogs[i].rayCount / benchmarkCyclesTotal);
+                        if (sortRays) {
+                            logInfo("MORTONCODES TIME  : {:.4f} ms", bounceLogs[i].mortonCodesTime / benchmarkCyclesTotal);
+                            logInfo("SORT TIME         : {:.4f} ms", bounceLogs[i].sortTime / benchmarkCyclesTotal);
+                            if (reorderRays) {
+                                logInfo("REORDER TIME      : {:.4f} ms", bounceLogs[i].reorderTime / benchmarkCyclesTotal);
+                            }
+                        }
+                        logInfo("TRACE TIME        : {:.4f} ms", bounceLogs[i].traceTime / benchmarkCyclesTotal);
+                        logInfo("");
+
+                        totalLog += bounceLogs[i];
+                    }
+
+                    logInfo("--------------------------------------------------");
+                    logInfo("BOUNCE LOG {} TOTAL", label);
+                    logInfo("RAY COUNTS        : {}", totalLog.rayCount / benchmarkCyclesTotal);
                     if (sortRays) {
-                        logInfo("MORTONCODES TIME  : {:.4f} ms", bounceLogs[i].mortonCodesTime / benchmarkCycle);
-                        logInfo("SORT TIME         : {:.4f} ms", bounceLogs[i].sortTime / benchmarkCycle);
+                        logInfo("MORTONCODES TIME  : {:.4f} ms", totalLog.mortonCodesTime / benchmarkCyclesTotal);
+                        logInfo("SORT TIME         : {:.4f} ms", totalLog.sortTime / benchmarkCyclesTotal);
                         if (reorderRays) {
-                            logInfo("REORDER TIME      : {:.4f} ms", bounceLogs[i].reorderTime / benchmarkCycle);
+                            logInfo("REORDER TIME      : {:.4f} ms", totalLog.reorderTime / benchmarkCyclesTotal);
                         }
                     }
-                    logInfo("TRACE TIME        : {:.4f} ms", bounceLogs[i].traceTime / benchmarkCycle);
-                    logInfo("");
+                    logInfo("TRACE TIME        : {:.4f} ms", totalLog.traceTime / benchmarkCyclesTotal);
+                    logInfo("--------------------------------------------------");
+                    logInfo("==================================================");
+                    };
 
-                    totalLog += bounceLogs[i];
-                }
+                printAndSum("SHADOW", shadowBounceLogs, recursionDepth + 1, renderer->getSortShadowRays(), renderer->getReorderShadowRays());
 
-                logInfo("--------------------------------------------------");
-                logInfo("BOUNCE LOG {} TOTAL", label);
-                logInfo("RAY COUNTS        : {}", totalLog.rayCount / benchmarkCycle);
-                if (sortRays) {
-                    logInfo("MORTONCODES TIME  : {:.4f} ms", totalLog.mortonCodesTime / benchmarkCycle);
-                    logInfo("SORT TIME         : {:.4f} ms", totalLog.sortTime / benchmarkCycle);
-                    if (reorderRays) {
-                        logInfo("REORDER TIME      : {:.4f} ms", totalLog.reorderTime / benchmarkCycle);
-                    }
-                }
-                logInfo("TRACE TIME        : {:.4f} ms", totalLog.traceTime / benchmarkCycle);
-                logInfo("--------------------------------------------------");
-                logInfo("==================================================");
-                };
-
-            printAndSum("SHADOW", shadowBounceLogs, recursionDepth + 1, renderer->getSortShadowRays(), renderer->getReorderShadowRays());
-
-            printAndSum("PATH", pathBounceLogs, recursionDepth, renderer->getSortPathRays(), renderer->getReorderPathRays());
-        }
+                printAndSum("PATH", pathBounceLogs, recursionDepth, renderer->getSortPathRays(), renderer->getReorderPathRays());
+            }
 
 #ifdef __ANDROID__
-        ANativeActivity_finish(androidApp->activity);
+            ANativeActivity_finish(androidApp->activity);
 #else
-        system("pause");
-        exit(0);
+            system("pause");
+            exit(0);
 #endif
+        }
+        else {
+            frameCount = -1;
+            view++;
+        }
 	}
 
 	frameCount++;

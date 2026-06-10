@@ -551,8 +551,8 @@ public:
 		env->getStringValue("Application.mode", mode);
 
 #if defined(_WIN32)
-		if (mode == "benchmark")
-			setupConsole("Vulkan Wavefront Path Tracer");
+		//if (mode == "benchmark")
+		setupConsole("Vulkan Wavefront Path Tracer");
 #endif
 
 		int w, h;

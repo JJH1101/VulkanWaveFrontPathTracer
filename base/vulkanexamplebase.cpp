@@ -1285,6 +1285,10 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 		case KEY_P:
 			paused = !paused;
 			break;
+		case KEY_F:
+			std::cout << "Camera position: " << camera.position.x << " " << camera.position.y << " " << camera.position.z << "\n";
+			std::cout << "Camera rotation: " << camera.rotation.x << " " << camera.rotation.y << " " << camera.rotation.z << "\n";
+			break;
 		case KEY_F1:
 			ui.visible = !ui.visible;
 			break;
