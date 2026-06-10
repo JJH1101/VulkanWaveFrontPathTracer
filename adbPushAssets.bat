@@ -1,3 +1,3 @@
-adb shell rm -rf /sdcard/Android/data/sogang.graphics.WaveFrontPathTracer/files/models
+adb shell rm -rf /data/local/tmp/WaveFrontPathTracer/models
 
-adb push assets/models /sdcard/Android/data/sogang.graphics.WaveFrontPathTracer/files/
+adb push assets/models/. /data/local/tmp/WaveFrontPathTracer/models/
