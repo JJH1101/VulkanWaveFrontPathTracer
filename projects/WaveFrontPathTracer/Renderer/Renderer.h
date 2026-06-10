@@ -273,6 +273,8 @@ public:
     float getWhitePoint(void);
     float getLightRadius(void);
     void setLightRadius(float lightRadius);
+    glm::vec3 getLightPosition(void);
+    void setLightPosition(glm::vec3 lightPosition);
     int getSamplesPerPixel(void);
     void setSamplesPerPixel(int samplesPerPixel);
     int getRecursionDepth(void);

@@ -148,6 +148,10 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
     for (bounce = 0; bounce <= recursionDepth; ++bounce) {
 		RayBuffer& inRays = bounce == 0 ? primaryRays : pathQueue.getInputRays();
 		
+        if(inRays.getSize() == 0) {
+            break;
+		}
+
         float traceTime = 0.0f;
 
         // Path rays.
@@ -173,7 +177,9 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
             time += reconstructSmooth(inRays, auxPixels);
         }
 
-        time += computeRayHits(inRays);
+        if(russianRoulette || bounce == recursionDepth) {
+            time += computeRayHits(inRays);
+		}
 
 		traceTime = traceRays(shadowRays, &shadowBounceLogs[bounce], sortShadowRays, reorderShadowRays);
         numberOfShadowRays += numberOfHits;
@@ -189,7 +195,7 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
 }
 
 float Renderer::traceRays(RayBuffer& rays, BounceLog* bounceLog, bool sortRays, bool reorderRays) {
-	float traceTime = 0.0f;
+    float traceTime = 0.0f;
     std::array<float, 4> times{};
     
     if (sortRays) {
@@ -200,7 +206,8 @@ float Renderer::traceRays(RayBuffer& rays, BounceLog* bounceLog, bool sortRays, 
     }
     
     if (mode == "benchmark" && bounceLog != nullptr && printBounceLogs) {
-        bounceLog->rayCount += rays.getSize();
+		int rayCount = rays.getClosestHit() ? rays.getSize() : numberOfHits;
+        bounceLog->rayCount += rayCount;
         if (sortRays) {
             bounceLog->mortonCodesTime += times[0];
             bounceLog->sortTime += times[1];
@@ -290,6 +297,7 @@ float Renderer::reconstructSmooth(RayBuffer & irays, RayBuffer & orays, vks::Buf
     counterHost.unmap();
 
     orays.resize(*device, rayCount);
+	if (!russianRoulette) numberOfHits = rayCount;
 	
     return time;
 }
@@ -636,6 +644,7 @@ void Renderer::setRayType(RayType rayType) {
 float Renderer::getLightRadius() {
     return lightRadius;
 }
+
 void Renderer::setLightRadius(float lightRadius) {
     if (lightRadius <= 0 || lightRadius > RENDERER_MAX_RADIUS) {
         std::cout << "WARN <Renderer> Light radius must be in range (0," << RENDERER_MAX_RADIUS << "].\n";
@@ -644,6 +653,15 @@ void Renderer::setLightRadius(float lightRadius) {
         this->lightRadius = lightRadius;
         resetFrameIndex();
     }
+}
+
+glm::vec3 Renderer::getLightPosition(void) {
+    return light;
+}
+
+void Renderer::setLightPosition(glm::vec3 lightPosition) {
+    this->light = lightPosition;
+    resetFrameIndex();
 }
 
 int Renderer::getSamplesPerPixel(void) {
