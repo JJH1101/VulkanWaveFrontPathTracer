@@ -199,7 +199,8 @@ float Renderer::traceRays(RayBuffer& rays, BounceLog* bounceLog, bool sortRays, 
     std::array<float, 4> times{};
     
     if (sortRays) {
-        traceTime = tracer.traceSort(rays, sceneMinPos, sceneMaxPos, reorderRays, times);
+        tracer.traceSort(rays, sceneMinPos, sceneMaxPos, reorderRays, times);
+        traceTime = times[3];
     }
     else {
         traceTime = tracer.trace(rays);

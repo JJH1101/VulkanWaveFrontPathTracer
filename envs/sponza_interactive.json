@@ -1,0 +1,34 @@
+{
+  "Application": {
+    "mode": "interactive"
+  },
+  "Resolution": {
+    "width": 1560,
+    "height": 720
+  },
+  "Scene": {
+    "filename": "models/Sponza/Sponza.gltf",
+    "light": "0.0 10.0 0.0",
+    "lightScale": 0.05,
+    "headlight": false
+  },
+  "Renderer": {
+    "samplesPerPixel": 1,
+    "rayType": "path",
+    "recursionDepth": 4,
+    "keyValue": 0.6,
+    "whitePoint": 2.0,
+    "russianRoulette": false,
+    "sortShadowRays": false,
+    "reorderShadowRays": false,
+    "sortPathRays": false,
+    "reorderPathRays": false
+  },
+  "Camera": {
+    "position": "-9.532621 5.238951 0.979480",
+    "rotation": "-11.349973 279.949829 0.000000",
+    "nearPlane": 0.1,
+    "farPlane": 512.0,
+    "fieldOfView": 60.0
+  }
+}

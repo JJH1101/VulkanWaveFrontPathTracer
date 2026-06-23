@@ -41,10 +41,10 @@
     "keyValue": 0.6,
     "whitePoint": 2.0,
     "russianRoulette": false,
-    "sortShadowRays": false,
-    "reorderShadowRays": false,
-    "sortPathRays": false,
-    "reorderPathRays": false
+    "sortShadowRays": true,
+    "reorderShadowRays": true,
+    "sortPathRays": true,
+    "reorderPathRays": true
   },
   "Camera": {
     "position": "-21.893288 6.842527 -2.459376",
