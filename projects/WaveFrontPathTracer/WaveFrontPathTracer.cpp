@@ -469,12 +469,18 @@ public:
 		static constexpr std::string_view shaderPath = "./../shaders/glsl/WaveFrontPathTracer/";
 #endif
 
-		vks::Buffer flagBuffer;
+		vks::Buffer flagBuffer, tidBuffer;
 		vks::Buffer taskCounterBuffer;
 		vulkanDevice->createBuffer(
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 			&flagBuffer,
+			numBlocks * sizeof(uint32_t)
+		);
+		vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			&tidBuffer,
 			numBlocks * sizeof(uint32_t)
 		);
 		vulkanDevice->createBuffer(
@@ -487,11 +493,15 @@ public:
 		struct PushConstantsFPG {
 			uint64_t flagBufferAddr;
 			uint64_t taskCounterAddr;
+			uint64_t tidBufferAddr;
 			uint32_t numBlocks;
+			uint32_t persistentThreading;
 		} pc;
 		pc.flagBufferAddr = getBufferDeviceAddress(flagBuffer.buffer);
 		pc.taskCounterAddr = getBufferDeviceAddress(taskCounterBuffer.buffer);
+		pc.tidBufferAddr = getBufferDeviceAddress(tidBuffer.buffer);
 		pc.numBlocks = numBlocks;
+		pc.persistentThreading = 0;
 
 		ComputePass fpgTestPass;
 		VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsFPG) };
@@ -502,7 +512,7 @@ public:
 
 		ComputePass::PushConstantDesc pushConstantDesc = { 0, sizeof(PushConstantsFPG), &pc };
 		std::vector<ComputePass::PushConstantDesc> pushConstantDescs = { pushConstantDesc };
-		ComputePass::DispatchDesc dispatchDesc = { 256, 1, 1 };
+		ComputePass::DispatchDesc dispatchDesc = { numBlocks, 1, 1 };
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
         LOGD("Begin FPG test\n");
@@ -512,9 +522,20 @@ public:
 
         for(uint32_t i = 0; i < numTests; i++) {
             vks::util::clearBuffer(*vulkanDevice, queue, &flagBuffer);
+			vks::util::clearBuffer(*vulkanDevice, queue, &tidBuffer);
             vks::util::clearBuffer(*vulkanDevice, queue, &taskCounterBuffer);
 			fpgTestPass.launch(queue, dispatchDesc, {}, {}, pushConstantDescs);
         }
+
+		tidBuffer.map();
+		uint32_t* tids = reinterpret_cast<uint32_t*>(tidBuffer.mapped);
+		for (uint32_t i = 0; i < 100; i++) {
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+			LOGD("tid[%d] = %d\n", i, tids[i]);
+#else
+			std::cout << "tid[" << i << "] = " << tids[i] << "\n";
+#endif
+		}
 
 		flagBuffer.map();
 		uint32_t* flags = reinterpret_cast<uint32_t*>(flagBuffer.mapped);
@@ -539,6 +560,8 @@ public:
 
 		flagBuffer.unmap();
 		flagBuffer.destroy();
+		tidBuffer.unmap();
+		tidBuffer.destroy();
 		taskCounterBuffer.destroy();
 	}
 

@@ -3,21 +3,47 @@
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
-layout(buffer_reference, std430) buffer FlagBuffer { volatile uint data[]; };
+layout(buffer_reference, std430) buffer UintBuffer { volatile uint data[]; };
 layout(buffer_reference, std430) buffer TaskCounter { volatile uint data; };
 
 layout(push_constant) uniform PushConstants {
 	uint64_t flagBufferAddr;
 	uint64_t taskCounterAddr;
+	uint64_t tidBufferAddr;
 	uint numBlocks;
+	uint persistentThreading;
 } pc;
 
 shared uint iBlock;
 
-layout(local_size_x = 64) in;
-void main() {
+void testFPG(){
 	uint localId = gl_LocalInvocationID.x;
-	FlagBuffer flags = FlagBuffer(pc.flagBufferAddr);
+	uint groupId = gl_WorkGroupID.x;
+
+	UintBuffer flags = UintBuffer(pc.flagBufferAddr);
+	TaskCounter counter = TaskCounter(pc.taskCounterAddr);
+	UintBuffer tidBuffer = UintBuffer(pc.tidBufferAddr);
+
+	if(localId == 0){
+		uint taskId = atomicAdd(counter.data, 1);
+		tidBuffer.data[taskId] = groupId;
+
+		if(groupId == 0) {
+			atomicExchange(flags.data[groupId], 1);
+		}
+		else {
+			do {
+				memoryBarrierBuffer();
+			} while (atomicAdd(flags.data[groupId - 1], 0) == 0);
+
+			atomicExchange(flags.data[groupId], 1);
+		}
+	}
+}
+
+void testFPT_PT(){
+	uint localId = gl_LocalInvocationID.x;
+	UintBuffer flags = UintBuffer(pc.flagBufferAddr);
 	TaskCounter counter = TaskCounter(pc.taskCounterAddr);
 
 	for(;;){
@@ -42,5 +68,15 @@ void main() {
 				atomicExchange(flags.data[iBlock], 1);
 			}
 		}
+	}
+}
+
+layout(local_size_x = 64) in;
+void main() {
+	if(pc.persistentThreading == 1){
+		testFPT_PT();
+	}
+	else {
+		testFPG();
 	}
 }
