@@ -739,10 +739,18 @@ void vkglTF::Model::createEmptyTexture(VkQueue transferQueue)
 */
 vkglTF::Model::~Model()
 {
-	vkDestroyBuffer(device->logicalDevice, vertices.buffer, nullptr);
-	vkFreeMemory(device->logicalDevice, vertices.memory, nullptr);
-	vkDestroyBuffer(device->logicalDevice, indices.buffer, nullptr);
-	vkFreeMemory(device->logicalDevice, indices.memory, nullptr);
+	if(vertices.buffer != VK_NULL_HANDLE) {
+		vkDestroyBuffer(device->logicalDevice, vertices.buffer, nullptr);
+	}
+	if(vertices.memory != VK_NULL_HANDLE) {
+		vkFreeMemory(device->logicalDevice, vertices.memory, nullptr);
+	}
+	if(indices.buffer != VK_NULL_HANDLE) {
+		vkDestroyBuffer(device->logicalDevice, indices.buffer, nullptr);
+	}
+	if(indices.memory != VK_NULL_HANDLE) {
+		vkFreeMemory(device->logicalDevice, indices.memory, nullptr);
+	}
 	for (auto& texture : textures) {
 		if(texture.image != emptyTexture.image)
 			texture.destroy();
@@ -1202,8 +1210,8 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 #endif
 	bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename);
 
-	std::vector<uint32_t> indexBuffer;
-	std::vector<Vertex> vertexBuffer;
+	indexBuffer.clear();
+	vertexBuffer.clear();
 
 	if (fileLoaded) {
 		if (!(fileLoadingFlags & FileLoadingFlags::DontLoadImages)) {
@@ -1274,69 +1282,74 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 		}
 	}
 
-	size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
-	size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
-	indices.count = static_cast<uint32_t>(indexBuffer.size());
-	vertices.count = static_cast<uint32_t>(vertexBuffer.size());
+	if(!(fileLoadingFlags & FileLoadingFlags::KeepCpuGeometry)) {
+		size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
+		size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
+		indices.count = static_cast<uint32_t>(indexBuffer.size());
+		vertices.count = static_cast<uint32_t>(vertexBuffer.size());
 
-	assert((vertexBufferSize > 0) && (indexBufferSize > 0));
+		assert((vertexBufferSize > 0) && (indexBufferSize > 0));
 
-	struct StagingBuffer {
-		VkBuffer buffer;
-		VkDeviceMemory memory;
-	} vertexStaging{}, indexStaging{};
+		struct StagingBuffer {
+			VkBuffer buffer;
+			VkDeviceMemory memory;
+		} vertexStaging{}, indexStaging{};
 
-	// Create staging buffers
-	// Vertex data
-	VK_CHECK_RESULT(device->createBuffer(
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		vertexBufferSize,
-		&vertexStaging.buffer,
-		&vertexStaging.memory,
-		vertexBuffer.data()));
-	// Index data
-	VK_CHECK_RESULT(device->createBuffer(
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		indexBufferSize,
-		&indexStaging.buffer,
-		&indexStaging.memory,
-		indexBuffer.data()));
+		// Create staging buffers
+		// Vertex data
+		VK_CHECK_RESULT(device->createBuffer(
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			vertexBufferSize,
+			&vertexStaging.buffer,
+			&vertexStaging.memory,
+			vertexBuffer.data()));
+		// Index data
+		VK_CHECK_RESULT(device->createBuffer(
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			indexBufferSize,
+			&indexStaging.buffer,
+			&indexStaging.memory,
+			indexBuffer.data()));
 
-	// Create device local buffers
-	// Vertex buffer
-	VK_CHECK_RESULT(device->createBuffer(
-	    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | memoryPropertyFlags,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		vertexBufferSize,
-		&vertices.buffer,
-		&vertices.memory));
-	// Index buffer
-	VK_CHECK_RESULT(device->createBuffer(
-	    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | memoryPropertyFlags,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		indexBufferSize,
-		&indices.buffer,
-		&indices.memory));
+		// Create device local buffers
+		// Vertex buffer
+		VK_CHECK_RESULT(device->createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | memoryPropertyFlags,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			vertexBufferSize,
+			&vertices.buffer,
+			&vertices.memory));
+		// Index buffer
+		VK_CHECK_RESULT(device->createBuffer(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | memoryPropertyFlags,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			indexBufferSize,
+			&indices.buffer,
+			&indices.memory));
 
-	// Copy from staging buffers
-	VkCommandBuffer copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		// Copy from staging buffers
+		VkCommandBuffer copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
-	VkBufferCopy copyRegion = {};
+		VkBufferCopy copyRegion = {};
 
-	copyRegion.size = vertexBufferSize;
-	vkCmdCopyBuffer(copyCmd, vertexStaging.buffer, vertices.buffer, 1, &copyRegion);
+		copyRegion.size = vertexBufferSize;
+		vkCmdCopyBuffer(copyCmd, vertexStaging.buffer, vertices.buffer, 1, &copyRegion);
 
-	copyRegion.size = indexBufferSize;
-	vkCmdCopyBuffer(copyCmd, indexStaging.buffer, indices.buffer, 1, &copyRegion);
+		copyRegion.size = indexBufferSize;
+		vkCmdCopyBuffer(copyCmd, indexStaging.buffer, indices.buffer, 1, &copyRegion);
 
-	device->flushCommandBuffer(copyCmd, transferQueue, true);
+		device->flushCommandBuffer(copyCmd, transferQueue, true);
 
-	vkDestroyBuffer(device->logicalDevice, vertexStaging.buffer, nullptr);
-	vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
-	vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
-	vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+		vkDestroyBuffer(device->logicalDevice, vertexStaging.buffer, nullptr);
+		vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
+		vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
+		vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+
+		std::vector<uint32_t>{}.swap(indexBuffer);
+		std::vector<Vertex>{}.swap(vertexBuffer);
+	}
 
 	getSceneDimensions();
 
@@ -1607,4 +1620,9 @@ void vkglTF::Model::prepareNodeDescriptor(vkglTF::Node* node, VkDescriptorSetLay
 	for (auto& child : node->children) {
 		prepareNodeDescriptor(child, descriptorSetLayout);
 	}
+}
+
+void vkglTF::Model::deallocateGeometryBuffers() {
+	std::vector<uint32_t>{}.swap(indexBuffer);
+	std::vector<Vertex>{}.swap(vertexBuffer);
 }

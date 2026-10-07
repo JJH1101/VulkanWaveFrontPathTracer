@@ -66,7 +66,9 @@ void main() {
         // Closest hit.
         if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
             result.primitiveId = rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
-            result.geometryId  = rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+            // The instance custom index is the cell's first geometry node.
+            result.geometryId  = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true)
+                               + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
             result.t = rayQueryGetIntersectionTEXT(rq, true);    
             result.packedBary = packUnorm2x16(rayQueryGetIntersectionBarycentricsEXT(rq, true));
         } 

@@ -168,20 +168,8 @@ private:
     VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
     VkDescriptorSet descriptorSet{ VK_NULL_HANDLE };
 
-    struct GeometryNode {
-        glm::vec4 baseColorFactor;
-        uint64_t vertexBufferDeviceAddress;
-        uint64_t indexBufferDeviceAddress;
-        int32_t textureIndexBaseColor;
-        int32_t textureIndexNormal;
-        int32_t textureIndexMetallicRoughness;
-        int32_t textureIndexEmissive;
-        float metallicFactor;
-        float roughnessFactor;
-        float _padding0;
-		float _padding1;
-    };
-    vks::Buffer geometryNodes;
+    // Borrowed from ASBuilder; its buffer must outlive Renderer.
+    VkDeviceAddress geometryNodeAddress = 0;
 
     glm::vec3 light;
 	float lightRadius;
@@ -256,14 +244,14 @@ private:
     float reconstructShadow(vks::Buffer & inPixels, vks::Buffer & outPixels, bool replace = false);
 
     void createDescriptorSet(vkglTF::Model& model);
-	void createGeometryNodeBuffer(vkglTF::Model& model);
 
 public:
 
     Renderer(void);
     ~Renderer(void);
 
-    void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer, vkglTF::Model& model);
+    void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer,
+        vkglTF::Model& model, const vks::Buffer& geometryNodeBuffer);
 
     RayType getRayType(void);
     void setRayType(RayType rayType);

@@ -234,6 +234,18 @@ namespace vkglTF
 		static std::vector<VkVertexInputAttributeDescription> inputAttributeDescriptions(uint32_t binding, const std::vector<VertexComponent> components);
 		/** @brief Returns the default pipeline vertex input state create info structure for the requested vertex components */
 		static VkPipelineVertexInputStateCreateInfo* getPipelineVertexInputState(const std::vector<VertexComponent> components);
+	
+		bool operator==(const Vertex& other) const noexcept
+		{
+			return
+				pos == other.pos &&
+				normal == other.normal &&
+				uv == other.uv &&
+				color == other.color &&
+				joint0 == other.joint0 &&
+				weight0 == other.weight0 &&
+				tangent == other.tangent;
+		}
 	};
 
 	enum FileLoadingFlags {
@@ -241,7 +253,8 @@ namespace vkglTF
 		PreTransformVertices = 0x00000001,
 		PreMultiplyVertexColors = 0x00000002,
 		FlipY = 0x00000004,
-		DontLoadImages = 0x00000008
+		DontLoadImages = 0x00000008,
+		KeepCpuGeometry = 0x00000010
 	};
 
 	enum RenderFlags {
@@ -264,15 +277,18 @@ namespace vkglTF
 		VkDescriptorPool descriptorPool;
 
 		struct Vertices {
-			int count;
-			VkBuffer buffer;
-			VkDeviceMemory memory;
+			int count = 0;
+			VkBuffer buffer = VK_NULL_HANDLE;
+			VkDeviceMemory memory = VK_NULL_HANDLE;
 		} vertices;
 		struct Indices {
-			int count;
-			VkBuffer buffer;
-			VkDeviceMemory memory;
+			int count = 0;
+			VkBuffer buffer = VK_NULL_HANDLE;
+			VkDeviceMemory memory = VK_NULL_HANDLE;
 		} indices;
+
+		std::vector<Vertex> vertexBuffer;
+		std::vector<uint32_t> indexBuffer;
 
 		std::vector<Node*> nodes;
 		std::vector<Node*> linearNodes;
@@ -313,5 +329,50 @@ namespace vkglTF
 		Node* nodeFromIndex(uint32_t index);
 		Node* nodeFromName(const std::string name);
 		void prepareNodeDescriptor(vkglTF::Node* node, VkDescriptorSetLayout descriptorSetLayout);
+		void deallocateGeometryBuffers();
 	};
+}
+
+namespace std
+{
+    template<>
+    struct hash<vkglTF::Vertex>
+    {
+        size_t operator()(
+            const vkglTF::Vertex& vertex) const noexcept
+        {
+            size_t seed = 0;
+
+            auto combine = [&seed](float value)
+            {
+                const size_t valueHash =
+                    std::hash<float>{}(value);
+
+                seed ^= valueHash
+                    + 0x9e3779b9
+                    + (seed << 6)
+                    + (seed >> 2);
+            };
+
+            auto combineVector = [&combine](const auto& vector)
+            {
+                for (glm::length_t i = 0;
+                     i < vector.length();
+                     ++i)
+                {
+                    combine(vector[i]);
+                }
+            };
+
+            combineVector(vertex.pos);
+            combineVector(vertex.normal);
+            combineVector(vertex.uv);
+            combineVector(vertex.color);
+            combineVector(vertex.joint0);
+            combineVector(vertex.weight0);
+            combineVector(vertex.tangent);
+
+            return seed;
+        }
+    };
 }

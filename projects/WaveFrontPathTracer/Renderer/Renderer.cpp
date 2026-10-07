@@ -237,7 +237,7 @@ float Renderer::reconstructSmooth(RayBuffer& irays, vks::Buffer& pixels, bool ge
     pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
     pc.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
     pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
-    pc.geometryNodeAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometryNodes.buffer);
+    pc.geometryNodeAddr = geometryNodeAddress;
     pc.shadowRayAddr = genShadow ? vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getRayBuffer().buffer) : 0;
     pc.shadowIdxToPixelAddr = genShadow ? vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getIndexToPixelBuffer().buffer) : 0;
     pc.pathRayAddr = 0;
@@ -273,7 +273,7 @@ float Renderer::reconstructSmooth(RayBuffer & irays, RayBuffer & orays, vks::Buf
 	pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
 	pc.decreaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, decreases.buffer);
 	pc.seedAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, seeds.buffer);
-	pc.geometryNodeAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometryNodes.buffer);
+	pc.geometryNodeAddr = geometryNodeAddress;
     pc.shadowRayAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getRayBuffer().buffer);
 	pc.shadowIdxToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, shadowRays.getIndexToPixelBuffer().buffer);
 	pc.pathRayAddr =  vks::util::getBufferDeviceAddress(device->logicalDevice, orays.getRayBuffer().buffer);
@@ -394,7 +394,6 @@ Renderer::~Renderer() {
     vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
 
-	geometryNodes.destroy();
     auxPixels.destroy();
     decreases.destroy();
     seeds.destroy();
@@ -455,54 +454,13 @@ void Renderer::createDescriptorSet(vkglTF::Model& model) {
     vkUpdateDescriptorSets(device->logicalDevice, 1, &writeDescriptorImgArray, 0, nullptr);
 }
 
-void Renderer::createGeometryNodeBuffer(vkglTF::Model& model) {
-	std::vector<GeometryNode> geometryNodesVec;
-    
-    for (auto node : model.linearNodes) {
-        if (node->mesh) {
-            for (auto primitive : node->mesh->primitives) {
-                if (primitive->indexCount > 0) {
-                    GeometryNode geometryNode{};
-                    geometryNode.vertexBufferDeviceAddress = vks::util::getBufferDeviceAddress(device->logicalDevice, model.vertices.buffer);
-                    geometryNode.indexBufferDeviceAddress = vks::util::getBufferDeviceAddress(device->logicalDevice, model.indices.buffer) + primitive->firstIndex * sizeof(uint32_t);
-                    geometryNode.textureIndexBaseColor = primitive->material.baseColorTexture ? primitive->material.baseColorTexture->index : -1;
-                    geometryNode.textureIndexNormal = primitive->material.normalTexture ? primitive->material.normalTexture->index : -1;
-                    geometryNode.textureIndexMetallicRoughness = primitive->material.metallicRoughnessTexture ? primitive->material.metallicRoughnessTexture->index : -1;
-                    geometryNode.textureIndexEmissive = primitive->material.emissiveTexture ? primitive->material.emissiveTexture->index : -1;
-                    geometryNode.metallicFactor = primitive->material.metallicFactor;
-                    geometryNode.roughnessFactor = primitive->material.roughnessFactor;
-					geometryNode.baseColorFactor = primitive->material.baseColorFactor;
-                    geometryNodesVec.push_back(geometryNode);
-                }
-            }
-        }
-    }
-
-    vks::Buffer stagingBuffer;
-
-    VK_CHECK_RESULT(device->createBuffer(
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        &stagingBuffer,
-        static_cast<uint32_t>(geometryNodesVec.size()) * sizeof(GeometryNode),
-        geometryNodesVec.data()));
-
-    VK_CHECK_RESULT(device->createBuffer(
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &geometryNodes,
-        static_cast<uint32_t>(geometryNodesVec.size()) * sizeof(GeometryNode)));
-
-    device->copyBuffer(&stagingBuffer, &geometryNodes, queue);
-
-    stagingBuffer.destroy();
-}
-
-void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer, vkglTF::Model& model) {
+void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer,
+    vkglTF::Model& model, const vks::Buffer& geometryNodeBuffer) {
 
     this->device = &_device;
     this->timer = &_timer;
     this->queue = _queue;
+    geometryNodeAddress = geometryNodeBuffer.deviceAddress;
 
     tracer.init(*device, *timer, queue);
 
@@ -539,7 +497,6 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
 
     // Create reconstructSmooth pipeline
 	createDescriptorSet(model);
-	createGeometryNodeBuffer(model);
 
     pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsReconstructSmooth) };
     pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "reconstructSmooth.comp.spv";
