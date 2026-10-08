@@ -69,7 +69,6 @@ Triangle unpackTriangle(uint primitiveId,
 	}
 	
 	tri.normal = normalize(tri.normal);
-	tri.tangent.xyz = normalize(tri.tangent.xyz);
 	
 	return tri;
 }

@@ -184,7 +184,7 @@ private:
     vks::Buffer geometryNodes;
 
     glm::vec3 light;
-	float lightRadius;
+	float lightRadius = 0.0f;
 
 	glm::vec3 sceneMinPos;
 	glm::vec3 sceneMaxPos;
@@ -249,7 +249,7 @@ private:
     float renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderPath(Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
 
-	float traceRays(RayBuffer& rays, BounceLog* bounceLog = nullptr, bool sortRays = false, bool reorderRays = false);
+	float traceRays(RayBuffer& rays, float& traceTime, BounceLog* bounceLog = nullptr, bool sortRays = false, bool reorderRays = false);
 
     float reconstructSmooth(RayBuffer& inRays, vks::Buffer& pixels, bool genShadow = true);
     float reconstructSmooth(RayBuffer& inRays, RayBuffer& outRays, vks::Buffer& pixels);
@@ -262,6 +262,8 @@ public:
 
     Renderer(void);
     ~Renderer(void);
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
 
     void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer, vkglTF::Model& model);
 

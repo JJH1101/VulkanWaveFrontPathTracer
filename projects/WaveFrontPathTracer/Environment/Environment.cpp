@@ -10,12 +10,13 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <utility>
 #include "../../../external/tinygltf/json.hpp"
 #include "VulkanTools.h"
 
 using json = nlohmann::json;
 
-Environment * Environment::instance = nullptr;
+std::unique_ptr<Environment> Environment::instance;
 
 bool Environment::filterValue(const std::string & value, std::string & filteredValue, OptType type) {
     bool valid = true;
@@ -98,18 +99,15 @@ void Environment::registerOption(const std::string & name, OptType type) {
 Environment * Environment::getInstance() {
     if (!instance)
         std::cerr << "WARN <Environment> Environment is not allocated.\n";
-    return instance;
+    return instance.get();
 }
 
 void Environment::deleteInstance() {
-    if (instance) {
-        delete instance;
-        instance = nullptr;
-    }
+    instance.reset();
 }
 
-void Environment::setInstance(Environment * instance) {
-    Environment::instance = instance;
+void Environment::setInstance(std::unique_ptr<Environment> instance) {
+    Environment::instance = std::move(instance);
 }
 
 Environment::Environment() {

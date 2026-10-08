@@ -15,14 +15,12 @@ Tracer::Tracer() {
 }
 
 Tracer::~Tracer() {
-    tracePass.destroy();
-    computeMortonCodesPass.destroy();
-	reorderRaysPass.destroy();
+    if (!device) return;
 
     vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
 
-	vrdxDestroySorter(sorter);
+	if (sorter) vrdxDestroySorter(sorter);
 }
 
 float Tracer::computeMortonCodes(RayBuffer& rays, glm::vec3 sceneMinPos, glm::vec3 sceneMaxPos) {

@@ -9,6 +9,7 @@
 #define _ENVIRONMENT_H_
 
 #include <string>
+#include <memory>
 #include <vector>
 #include <unordered_map>
 #include <glm/glm.hpp>
@@ -32,7 +33,7 @@ class Environment {
 
 private:
 
-    static Environment * instance;
+    static std::unique_ptr<Environment> instance;
 
     std::unordered_map<std::string, Option> options;
 
@@ -49,7 +50,7 @@ public:
 
     static Environment * getInstance(void);
     static void deleteInstance(void);
-    static void setInstance(Environment * instance);
+    static void setInstance(std::unique_ptr<Environment> instance);
 
     Environment(void);
     virtual ~Environment(void);

@@ -15,18 +15,11 @@
     */
 
 #include "PixelTable.h"
-#include "../Utils/BufferUtils.h"
 #include <vector>
 
-void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue) {
+void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue, vks::Buffer& indexToPixel) {
 
     // Construct LUTs.
-    vks::util::resizeDiscardBuffer(
-        device,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        &indexToPixel,
-        size.x * size.y * sizeof(int));
     std::vector<int> idxtopos(size.x * size.y);
 
     // Smart mode.
@@ -112,19 +105,12 @@ void PixelTable::recalculate(vks::VulkanDevice& device, VkQueue queue) {
 PixelTable::PixelTable() : size(glm::ivec2(0)) {
 }
 
-PixelTable::~PixelTable() {
-}
-
-void PixelTable::setSize(const glm::ivec2 & _size, vks::VulkanDevice & device, VkQueue queue) {
+void PixelTable::setSize(const glm::ivec2 & _size, vks::VulkanDevice & device, VkQueue queue, vks::Buffer& indexToPixel) {
     bool recalc = (_size != size);
     size = _size;
-    if (recalc) recalculate(device, queue);
+    if (recalc) recalculate(device, queue, indexToPixel);
 }
 
 const glm::ivec2 & PixelTable::getSize() {
     return size;
-}
-
-vks::Buffer & PixelTable::getIndexToPixel() {
-    return indexToPixel;
 }

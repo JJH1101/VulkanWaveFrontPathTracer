@@ -66,6 +66,8 @@ public:
 
     Tracer(void);
     ~Tracer(void);
+    Tracer(const Tracer&) = delete;
+    Tracer& operator=(const Tracer&) = delete;
 
     void init(vks::VulkanDevice& device, GPUTimer& timer, VkQueue queue);
     void setAccererationStructure(VkAccelerationStructureKHR topLevelAS);

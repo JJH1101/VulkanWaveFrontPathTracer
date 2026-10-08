@@ -38,6 +38,7 @@ std::string Benchmark::rayTypeToString(Renderer::RayType rayType) {
 }
 
 void Benchmark::reset() {
+   finished = false;
 
    bvhKernelsTime = 0.0f;
    bvhAbsoluteTime = 0.0f;
@@ -80,6 +81,9 @@ void Benchmark::reset() {
 
    Environment::getInstance()->getIntValue("Benchmark.warmupCyclesPerView", warmupCyclesPerView);
    Environment::getInstance()->getIntValue("Benchmark.benchmarkCyclesPerView", benchmarkCyclesPerView);
+   if (warmupCyclesPerView < 0 || benchmarkCyclesPerView <= 0) {
+       vks::tools::exitFatal("Benchmark requires warmupCyclesPerView >= 0 and benchmarkCyclesPerView >= 1", -1);
+   }
 
    views.cameraPositions.clear();
    views.cameraRotations.clear();
@@ -93,6 +97,7 @@ void Benchmark::reset() {
 }
 
 float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
+    if (finished) return 0.0f;
 
     if(frameCount == 0) {
         camera.setPosition(views.cameraPositions[view]);
@@ -220,12 +225,7 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
                 printAndSum("PATH", pathBounceLogs, recursionDepth, renderer->getSortPathRays(), renderer->getReorderPathRays());
             }
 
-#ifdef __ANDROID__
-            ANativeActivity_finish(androidApp->activity);
-#else
-            system("pause");
-            exit(0);
-#endif
+            finished = true;
         }
         else {
             frameCount = -1;

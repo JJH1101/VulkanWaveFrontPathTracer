@@ -42,6 +42,13 @@ void main() {
 
         // Input ray.
         Ray ray = rays.data[rayIndex];
+        RayResult result = RayResult(-1, -1, -1.0, 0u);
+
+        // Invalid rays represent inactive tasks; record a miss without traversal.
+        if (!(ray.tmin >= 0.0 && ray.tmax >= ray.tmin)) {
+            results.data[rayIndex] = result;
+            return;
+        }
 
         // Init ray query
         rayQueryEXT rq;
@@ -60,9 +67,6 @@ void main() {
         while (rayQueryProceedEXT(rq)) {
         }
 
-        // Record result.
-        RayResult result;
-
         // Closest hit.
         if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
             result.primitiveId = rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
@@ -70,13 +74,6 @@ void main() {
             result.t = rayQueryGetIntersectionTEXT(rq, true);    
             result.packedBary = packUnorm2x16(rayQueryGetIntersectionBarycentricsEXT(rq, true));
         } 
-        // Miss
-        else {
-            result.primitiveId = -1;
-            result.geometryId  = -1;
-            result.t = -1.0;
-            result.packedBary = 0;
-        }
         
         results.data[rayIndex] = result;
 

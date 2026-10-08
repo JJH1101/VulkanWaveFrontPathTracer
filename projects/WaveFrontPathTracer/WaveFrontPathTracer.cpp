@@ -14,6 +14,8 @@
 #include "Utils/BufferUtils.h"
 #include "Environment/AppEnvironment.h"
 
+#include <memory>
+
 #if defined(__ANDROID__)
 #include "jni.h"
 
@@ -49,8 +51,10 @@ private:
 	VkPipeline pipeline{ VK_NULL_HANDLE };
 	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 
-	Renderer renderer;
+	// Resources outlive the Renderer and Benchmark that use them.
+	vkglTF::Model model;
 	GPUTimer timer;
+	Renderer renderer;
 
 	double renderKernelTimeAccumulator = 0.0;
 	uint32_t renderKernelFPS = 0;
@@ -58,9 +62,7 @@ private:
 	std::chrono::time_point<std::chrono::high_resolution_clock> lastRenderTimestamp;
 
 	std::string mode = "interactive";
-	Benchmark* benchmark = nullptr;
-
-	vkglTF::Model model;
+	std::unique_ptr<Benchmark> benchmark;
 
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{};
@@ -367,6 +369,7 @@ private:
 	*/
 	void handleResize()
 	{
+		renderer.resetFrameIndex();
 		resized = false;
 	}
 
@@ -411,9 +414,11 @@ private:
 	void loadAssets()
 	{
 		vkglTF::memoryPropertyFlags = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		const uint32_t fileLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices;
+
 		std::string sceneFile;
 		Environment::getInstance()->getStringValue("Scene.filename", sceneFile);
-		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue);
+		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue, fileLoadingFlags);
 	}
 
 	float draw()
@@ -500,6 +505,16 @@ private:
 		present();
 
 		VulkanExampleBase::submitFrame();
+		if (benchmark && benchmark->isFinished()) {
+			prepared = false;
+#if defined(_WIN32)
+			PostQuitMessage(0);
+#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+			ANativeActivity_finish(androidApp->activity);
+#else
+			quit = true;
+#endif
+		}
 
 		auto now = std::chrono::high_resolution_clock::now();
 		float elapsedMs = std::chrono::duration<double, std::milli>(now - lastRenderTimestamp).count();
@@ -532,8 +547,8 @@ public:
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 
-		Environment* env = new AppEnvironment();
-		Environment::setInstance(env);
+		Environment::setInstance(std::make_unique<AppEnvironment>());
+		Environment* env = Environment::getInstance();
 
 		std::string envFile;
 #if defined(__ANDROID__)
@@ -549,6 +564,9 @@ public:
 		env->readEnvFile(getEnvPath() + envFile);
 
 		env->getStringValue("Application.mode", mode);
+		if (mode != "interactive" && mode != "benchmark") {
+			vks::tools::exitFatal("Application.mode must be interactive or benchmark", -1);
+		}
 
 #if defined(_WIN32)
 		//if (mode == "benchmark")
@@ -578,18 +596,15 @@ public:
 	~VulkanExample()
 	{
 		if (device) {
+			vkDeviceWaitIdle(device);
 			vkDestroyPipeline(device, pipeline, nullptr);
 			vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
-			deleteAccelerationStructure(bottomLevelAS);
-			deleteAccelerationStructure(topLevelAS);
+			if (topLevelAS.handle) deleteAccelerationStructure(topLevelAS);
+			if (bottomLevelAS.handle) deleteAccelerationStructure(bottomLevelAS);
 			pixels.destroy();
 			framePixels.destroy();
 			transformBuffer.destroy();
-		}
-
-		if (benchmark) {
-			delete benchmark;
 		}
 	}
 
@@ -609,7 +624,7 @@ public:
 		renderer.init(*vulkanDevice, queue, timer, model);
 
 		if (mode == "benchmark") {
-			benchmark = new Benchmark(&renderer);
+			benchmark = std::make_unique<Benchmark>(&renderer);
 		}
 
 		renderer.setAccelerationStructure(topLevelAS.handle);

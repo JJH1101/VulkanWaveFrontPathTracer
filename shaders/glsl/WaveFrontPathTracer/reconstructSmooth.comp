@@ -54,7 +54,7 @@ void main() {
     RayResultBufferRO inputResults = RayResultBufferRO(pc.inputResultAddr);
     IntBufferRO inputIndexToPixel = IntBufferRO(pc.inputIdxToPixelAddr);
 
-    Vec4BufferRO pixels = Vec4BufferRO(pc.pixelAddr);
+    Vec4BufferRW pixels = Vec4BufferRW(pc.pixelAddr);
     Vec4BufferRW decreases = Vec4BufferRW(pc.decreaseAddr);
     UintBufferRW seeds = UintBufferRW(pc.seedAddr);
     GeometryNodeBuffer geometryNodes = GeometryNodeBuffer(pc.geometryNodeAddr);
@@ -102,7 +102,7 @@ void main() {
             
             // Base color (albedo).
             if (nonuniformEXT(geometryNode.textureIndexBaseColor) > -1) {
-		        tri.color.rgb = pow(texture(textures[nonuniformEXT(geometryNode.textureIndexBaseColor)], tri.uv).rgb, vec3(2.2f));
+		        tri.color.rgb *= pow(texture(textures[nonuniformEXT(geometryNode.textureIndexBaseColor)], tri.uv).rgb, vec3(2.2f));
 	        }
             tri.color *= geometryNode.baseColorFactor;
 
@@ -218,7 +218,11 @@ void main() {
         }
 
         // Update color.
-        pixels.data[pixel] = vec4(color, 1.0f);
+        if (pc.shadowRayAddr == 0 && pc.pathRayAddr == 0) {
+            pixels.data[pixel] += vec4(color, 1.0f);
+        } else {
+            pixels.data[pixel] = vec4(color, 1.0f);
+        }
 
         // Write shadow rays.
         if (pc.shadowRayAddr > 0) {

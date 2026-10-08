@@ -257,22 +257,22 @@ namespace vkglTF
 	class Model {
 	private:
 		vkglTF::Texture* getTexture(uint32_t index);
-		vkglTF::Texture emptyTexture;
+		vkglTF::Texture emptyTexture{};
 		void createEmptyTexture(VkQueue transferQueue);
 	public:
-		vks::VulkanDevice* device;
-		VkDescriptorPool descriptorPool;
+		vks::VulkanDevice* device = nullptr;
+		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		struct Vertices {
 			int count;
 			VkBuffer buffer;
 			VkDeviceMemory memory;
-		} vertices;
+		} vertices{};
 		struct Indices {
 			int count;
 			VkBuffer buffer;
 			VkDeviceMemory memory;
-		} indices;
+		} indices{};
 
 		std::vector<Node*> nodes;
 		std::vector<Node*> linearNodes;

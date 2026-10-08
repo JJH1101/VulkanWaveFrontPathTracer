@@ -18,6 +18,7 @@
 #include "../Environment/Environment.h"
 #include <bit>
 #include <array>
+#include <cmath>
 
 PathQueue::PathQueue() : swapBuffers(false) {
 }
@@ -156,18 +157,16 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
 
         // Path rays.
         if (bounce > 0) {
-			traceTime = traceRays(inRays, &pathBounceLogs[bounce - 1], sortPathRays, reorderPathRays);
+			time += traceRays(inRays, traceTime, &pathBounceLogs[bounce - 1], sortPathRays, reorderPathRays);
             numberOfPathRays += inRays.getSize();
             pathTraceTime += traceTime;
         }
         // Bounce = 0 -> primary rays.
         else {
-			traceTime = traceRays(inRays);
+			time += traceRays(inRays, traceTime);
             numberOfPrimaryRays += (extent.x * extent.y);
             primaryTraceTime += traceTime;
         }
-        time += traceTime;
-
         // Not last bounce.
         if (bounce != recursionDepth) {
             time += reconstructSmooth(inRays, pathQueue.getOutputRays(), auxPixels);
@@ -181,11 +180,9 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
             time += computeRayHits(inRays);
 		}
 
-		traceTime = traceRays(shadowRays, &shadowBounceLogs[bounce], sortShadowRays, reorderShadowRays);
+		time += traceRays(shadowRays, traceTime, &shadowBounceLogs[bounce], sortShadowRays, reorderShadowRays);
         numberOfShadowRays += numberOfHits;
         shadowTraceTime += traceTime;
-        time += traceTime;
-
         time += reconstructShadow(auxPixels, pixels, false);
 
 		pathQueue.swap();
@@ -194,16 +191,17 @@ float Renderer::renderPath(Camera& camera, glm::ivec2 extent, vks::Buffer& pixel
     return time;
 }
 
-float Renderer::traceRays(RayBuffer& rays, BounceLog* bounceLog, bool sortRays, bool reorderRays) {
-    float traceTime = 0.0f;
+float Renderer::traceRays(RayBuffer& rays, float& traceTime, BounceLog* bounceLog, bool sortRays, bool reorderRays) {
+    float totalTime = 0.0f;
     std::array<float, 4> times{};
     
     if (sortRays) {
-        tracer.traceSort(rays, sceneMinPos, sceneMaxPos, reorderRays, times);
+        totalTime = tracer.traceSort(rays, sceneMinPos, sceneMaxPos, reorderRays, times);
         traceTime = times[3];
     }
     else {
         traceTime = tracer.trace(rays);
+        totalTime = traceTime;
     }
     
     if (mode == "benchmark" && bounceLog != nullptr && printBounceLogs) {
@@ -220,7 +218,7 @@ float Renderer::traceRays(RayBuffer& rays, BounceLog* bounceLog, bool sortRays, 
         }
     }
 
-	return traceTime;
+	return totalTime;
 }
 
 float Renderer::reconstructSmooth(RayBuffer& irays, vks::Buffer& pixels, bool genShadow) {
@@ -351,10 +349,9 @@ float Renderer::initSeeds(int numberOfPixels, int frameIndex) {
 float Renderer::raygenPrimary(Camera& camera, glm::ivec2& extent, int sampleIndex) {
 
     // Closest hit.
-    pixelTable.setSize(extent, *device, queue);
-    primaryRays.resize(*device, extent.x * extent.y, true);
+    primaryRays.resize(*device, extent.x * extent.y);
+    pixelTable.setSize(extent, *device, queue, primaryRays.getIndexToPixelBuffer());
     primaryRays.setClosestHit(true);
-    primaryRays.getIndexToPixelBuffer() = pixelTable.getIndexToPixel();
 
     // Set push constants.
     PushConstantsRaygenPrimary pc{};
@@ -384,12 +381,7 @@ Renderer::Renderer() :
 }
 
 Renderer::~Renderer() {
-	initSeedsPass.destroy();
-	raygenPrimaryPass.destroy();
-	countRayHitsPass.destroy();
-	interpolateColorsPass.destroy();
-	reconstructSmoothPass.destroy();
-	reconstructShadowPass.destroy();
+    if (!device) return;
 
     vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
@@ -465,10 +457,10 @@ void Renderer::createGeometryNodeBuffer(vkglTF::Model& model) {
                     GeometryNode geometryNode{};
                     geometryNode.vertexBufferDeviceAddress = vks::util::getBufferDeviceAddress(device->logicalDevice, model.vertices.buffer);
                     geometryNode.indexBufferDeviceAddress = vks::util::getBufferDeviceAddress(device->logicalDevice, model.indices.buffer) + primitive->firstIndex * sizeof(uint32_t);
-                    geometryNode.textureIndexBaseColor = primitive->material.baseColorTexture ? primitive->material.baseColorTexture->index : -1;
-                    geometryNode.textureIndexNormal = primitive->material.normalTexture ? primitive->material.normalTexture->index : -1;
-                    geometryNode.textureIndexMetallicRoughness = primitive->material.metallicRoughnessTexture ? primitive->material.metallicRoughnessTexture->index : -1;
-                    geometryNode.textureIndexEmissive = primitive->material.emissiveTexture ? primitive->material.emissiveTexture->index : -1;
+                    geometryNode.textureIndexBaseColor = primitive->material.baseColorTexture ? static_cast<int32_t>(primitive->material.baseColorTexture->index) : -1;
+                    geometryNode.textureIndexNormal = primitive->material.normalTexture ? static_cast<int32_t>(primitive->material.normalTexture->index) : -1;
+                    geometryNode.textureIndexMetallicRoughness = primitive->material.metallicRoughnessTexture ? static_cast<int32_t>(primitive->material.metallicRoughnessTexture->index) : -1;
+                    geometryNode.textureIndexEmissive = primitive->material.emissiveTexture ? static_cast<int32_t>(primitive->material.emissiveTexture->index) : -1;
                     geometryNode.metallicFactor = primitive->material.metallicFactor;
                     geometryNode.roughnessFactor = primitive->material.roughnessFactor;
 					geometryNode.baseColorFactor = primitive->material.baseColorFactor;
@@ -647,8 +639,8 @@ float Renderer::getLightRadius() {
 }
 
 void Renderer::setLightRadius(float lightRadius) {
-    if (lightRadius <= 0 || lightRadius > RENDERER_MAX_RADIUS) {
-        std::cout << "WARN <Renderer> Light radius must be in range (0," << RENDERER_MAX_RADIUS << "].\n";
+    if (!std::isfinite(lightRadius) || lightRadius < 0 || lightRadius > RENDERER_MAX_RADIUS) {
+        std::cout << "WARN <Renderer> Light radius must be in range [0," << RENDERER_MAX_RADIUS << "].\n";
     }
     else {
         this->lightRadius = lightRadius;

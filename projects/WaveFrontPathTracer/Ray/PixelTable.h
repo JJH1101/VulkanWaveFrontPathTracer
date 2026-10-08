@@ -24,18 +24,15 @@ class PixelTable {
 private:
 
     glm::ivec2 size;
-    vks::Buffer indexToPixel; // int, Managed and destroyed by an external class
 
-    void recalculate(vks::VulkanDevice& device, VkQueue queue);
+    void recalculate(vks::VulkanDevice& device, VkQueue queue, vks::Buffer& indexToPixel);
 
 public:
 
     PixelTable(void);
-    ~PixelTable(void);
 
-    void setSize(const glm::ivec2 & size, vks::VulkanDevice & device, VkQueue queue);
+    void setSize(const glm::ivec2 & size, vks::VulkanDevice & device, VkQueue queue, vks::Buffer& indexToPixel);
 
     const glm::ivec2 & getSize(void);
-    vks::Buffer & getIndexToPixel(void);
 
 };
