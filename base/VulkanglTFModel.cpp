@@ -635,6 +635,7 @@ vkglTF::Texture* vkglTF::Model::getTexture(uint32_t index)
 void vkglTF::Model::createEmptyTexture(VkQueue transferQueue)
 {
 	emptyTexture.device = device;
+	emptyTexture.index = -1;
 	emptyTexture.width = 1;
 	emptyTexture.height = 1;
 	emptyTexture.layerCount = 1;
@@ -739,18 +740,11 @@ void vkglTF::Model::createEmptyTexture(VkQueue transferQueue)
 */
 vkglTF::Model::~Model()
 {
-	if(vertices.buffer != VK_NULL_HANDLE) {
-		vkDestroyBuffer(device->logicalDevice, vertices.buffer, nullptr);
-	}
-	if(vertices.memory != VK_NULL_HANDLE) {
-		vkFreeMemory(device->logicalDevice, vertices.memory, nullptr);
-	}
-	if(indices.buffer != VK_NULL_HANDLE) {
-		vkDestroyBuffer(device->logicalDevice, indices.buffer, nullptr);
-	}
-	if(indices.memory != VK_NULL_HANDLE) {
-		vkFreeMemory(device->logicalDevice, indices.memory, nullptr);
-	}
+	if (!device) return;
+	vkDestroyBuffer(device->logicalDevice, vertices.buffer, nullptr);
+	vkFreeMemory(device->logicalDevice, vertices.memory, nullptr);
+	vkDestroyBuffer(device->logicalDevice, indices.buffer, nullptr);
+	vkFreeMemory(device->logicalDevice, indices.memory, nullptr);
 	for (auto& texture : textures) {
 		if(texture.image != emptyTexture.image)
 			texture.destroy();
@@ -1252,25 +1246,53 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 		for (Node* node : linearNodes) {
 			if (node->mesh) {
 				const glm::mat4 localMatrix = node->getMatrix();
+				const glm::mat3 tangentMatrix(localMatrix);
+				const glm::mat3 normalMatrix = preTransform ? glm::transpose(glm::inverse(tangentMatrix)) : glm::mat3(1.0f);
+				const float tangentSign = preTransform && glm::determinant(tangentMatrix) < 0.0f ? -1.0f : 1.0f;
 				for (Primitive* primitive : node->mesh->primitives) {
+					glm::vec3 min(FLT_MAX), max(-FLT_MAX);
 					for (uint32_t i = 0; i < primitive->vertexCount; i++) {
 						Vertex& vertex = vertexBuffer[primitive->firstVertex + i];
 						// Pre-transform vertex positions by node-hierarchy
 						if (preTransform) {
 							vertex.pos = glm::vec3(localMatrix * glm::vec4(vertex.pos, 1.0f));
-							vertex.normal = glm::normalize(glm::mat3(localMatrix) * vertex.normal);
+							vertex.normal = glm::normalize(normalMatrix * vertex.normal);
+							glm::vec3 tangent = tangentMatrix * glm::vec3(vertex.tangent);
+							if (glm::dot(tangent, tangent) > 0.0f) tangent = glm::normalize(tangent);
+							vertex.tangent = glm::vec4(tangent, vertex.tangent.w * tangentSign);
 						}
 						// Flip Y-Axis of vertex positions
 						if (flipY) {
 							vertex.pos.y *= -1.0f;
 							vertex.normal.y *= -1.0f;
+							vertex.tangent.y *= -1.0f;
+							vertex.tangent.w *= -1.0f;
 						}
 						// Pre-Multiply vertex colors with material base color
 						if (preMultiplyColor) {
 							vertex.color = primitive->material.baseColorFactor * vertex.color;
 						}
+						if (preTransform || flipY) {
+							min = glm::min(min, vertex.pos);
+							max = glm::max(max, vertex.pos);
+						}
+					}
+					if (preTransform || flipY) {
+						primitive->setDimensions(min, max);
 					}
 				}
+			}
+		}
+		if (preTransform) {
+			// Reset only after all vertices have used the original node hierarchy.
+			for (Node* node : linearNodes) {
+				node->translation = glm::vec3(0.0f);
+				node->rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				node->scale = glm::vec3(1.0f);
+				node->matrix = glm::mat4(1.0f);
+			}
+			for (Node* node : nodes) {
+				node->update();
 			}
 		}
 	}

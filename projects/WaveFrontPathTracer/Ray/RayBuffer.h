@@ -40,12 +40,14 @@ public:
 
     RayBuffer(void);
     ~RayBuffer(void);
+    RayBuffer(const RayBuffer&) = delete;
+    RayBuffer& operator=(const RayBuffer&) = delete;
 
     void swap(void);
 
     int getSize(void) const;
     int getCapacity(void) const;
-    void resize(vks::VulkanDevice& device, int n, bool isPrimary = false);
+    void resize(vks::VulkanDevice& device, int n);
     void resizeReorderingBuffers(vks::VulkanDevice& device, bool reorderRays);
 
     bool getClosestHit(void) const;

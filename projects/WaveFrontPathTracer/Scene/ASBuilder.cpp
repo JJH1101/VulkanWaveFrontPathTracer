@@ -146,10 +146,10 @@ void scene::ASBuilder::CreateBottomLevelAccelerationStructure(vkglTF::Model& mod
         node.vertexBufferDeviceAddress = vertexAddress;
         node.indexBufferDeviceAddress = geometryIndexAddress;
         node.baseColorFactor = material.baseColorFactor;
-        node.textureIndexBaseColor = material.baseColorTexture ? material.baseColorTexture->index : -1;
-        node.textureIndexNormal = material.normalTexture ? material.normalTexture->index : -1;
-        node.textureIndexMetallicRoughness = material.metallicRoughnessTexture ? material.metallicRoughnessTexture->index : -1;
-        node.textureIndexEmissive = material.emissiveTexture ? material.emissiveTexture->index : -1;
+        node.textureIndexBaseColor = material.baseColorTexture ? static_cast<int32_t>(material.baseColorTexture->index) : -1;
+        node.textureIndexNormal = material.normalTexture ? static_cast<int32_t>(material.normalTexture->index) : -1;
+        node.textureIndexMetallicRoughness = material.metallicRoughnessTexture ? static_cast<int32_t>(material.metallicRoughnessTexture->index) : -1;
+        node.textureIndexEmissive = material.emissiveTexture ? static_cast<int32_t>(material.emissiveTexture->index) : -1;
         node.metallicFactor = material.metallicFactor;
         node.roughnessFactor = material.roughnessFactor;
         geometryNodes.push_back(node);

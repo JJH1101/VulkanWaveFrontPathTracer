@@ -44,7 +44,7 @@ int RayBuffer::getCapacity() const {
     return capacity;
 }
 
-void RayBuffer::resize(vks::VulkanDevice& device, int size, bool isPrimary) {
+void RayBuffer::resize(vks::VulkanDevice& device, int size) {
     assert(size >= 0);
     if (capacity < size) {
         capacity = size;
@@ -56,8 +56,7 @@ void RayBuffer::resize(vks::VulkanDevice& device, int size, bool isPrimary) {
 
 		vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &rays[swapIdx], size * sizeof(Ray));
         vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &results, size * sizeof(RayResult));
-        if (!isPrimary)
-            vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToPixel[swapIdx], size * sizeof(int));
+        vks::util::resizeDiscardBuffer(device, usageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT, memFlags, &indexToPixel[swapIdx], size * sizeof(int));
     }
     this->size = size;
 }
@@ -71,7 +70,7 @@ void RayBuffer::resizeReorderingBuffers(vks::VulkanDevice& device, bool reorderR
     if (rays[swapIdx].size < capacity * sizeof(Ray)) {
         if (reorderRays) {
             vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &rays[swapIdx], capacity * sizeof(Ray));
-            vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indexToPixel[swapIdx], capacity * sizeof(int));
+            vks::util::resizeDiscardBuffer(device, usageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT, memFlags, &indexToPixel[swapIdx], capacity * sizeof(int));
         }
         vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &indices, capacity * sizeof(uint32_t));
 		vks::util::resizeDiscardBuffer(device, usageFlags, memFlags, &mortonCodes, capacity * sizeof(uint32_t));

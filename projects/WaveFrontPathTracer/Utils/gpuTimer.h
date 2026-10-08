@@ -34,6 +34,8 @@ public:
 		}
 	}
 	GPUTimer() {}
+	GPUTimer(const GPUTimer&) = delete;
+	GPUTimer& operator=(const GPUTimer&) = delete;
 	void init(vks::VulkanDevice& _device, uint32_t queryCount = 2)
 	{
 		this->device = _device.logicalDevice;

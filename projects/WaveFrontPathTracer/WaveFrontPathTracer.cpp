@@ -17,6 +17,8 @@
 
 #include <stdexcept>
 
+#include <memory>
+
 #if defined(__ANDROID__)
 #include "jni.h"
 
@@ -60,7 +62,7 @@ private:
 	std::chrono::time_point<std::chrono::high_resolution_clock> lastRenderTimestamp;
 
 	std::string mode = "interactive";
-	Benchmark* benchmark = nullptr;
+	std::unique_ptr<Benchmark> benchmark;
 
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{};
@@ -112,6 +114,7 @@ private:
 	*/
 	void handleResize()
 	{
+		renderer.resetFrameIndex();
 		resized = false;
 	}
 
@@ -152,12 +155,14 @@ private:
 	void loadAssets()
 	{
 		vkglTF::memoryPropertyFlags = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		const uint32_t fileLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices;
+
 		std::string sceneFile;
 		Environment::getInstance()->getStringValue("Scene.filename", sceneFile);
 		// Cell bounds and partitioned BLASes use world-space CPU vertices.
 		const uint32_t loadingFlags = buildFlags == scene::ASBuilder::BuildFlags::Partitioned
-			? vkglTF::FileLoadingFlags::PreMultiplyVertexColors | vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::KeepCpuGeometry
-			: vkglTF::FileLoadingFlags::PreMultiplyVertexColors | vkglTF::FileLoadingFlags::PreTransformVertices;
+			? fileLoadingFlags | vkglTF::FileLoadingFlags::KeepCpuGeometry
+			: fileLoadingFlags;
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue, loadingFlags);
 		if (buildFlags == scene::ASBuilder::BuildFlags::Partitioned) {
 			// Match the grid bounds to the pre-transformed vertices, not local primitive bounds.
@@ -258,6 +263,16 @@ private:
 		present();
 
 		VulkanExampleBase::submitFrame();
+		if (benchmark && benchmark->isFinished()) {
+			prepared = false;
+#if defined(_WIN32)
+			PostQuitMessage(0);
+#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+			ANativeActivity_finish(androidApp->activity);
+#else
+			quit = true;
+#endif
+		}
 
 		auto now = std::chrono::high_resolution_clock::now();
 		float elapsedMs = std::chrono::duration<double, std::milli>(now - lastRenderTimestamp).count();
@@ -295,8 +310,8 @@ public:
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 
-		Environment* env = new AppEnvironment();
-		Environment::setInstance(env);
+		Environment::setInstance(std::make_unique<AppEnvironment>());
+		Environment* env = Environment::getInstance();
 
 		std::string envFile;
 #if defined(__ANDROID__)
@@ -312,6 +327,9 @@ public:
 		env->readEnvFile(getEnvPath() + envFile);
 
 		env->getStringValue("Application.mode", mode);
+		if (mode != "interactive" && mode != "benchmark") {
+			vks::tools::exitFatal("Application.mode must be interactive or benchmark", -1);
+		}
 		std::string asMode;
 		env->getStringValue("Scene.ASMode", asMode);
 		if (asMode == "default") {
@@ -359,10 +377,6 @@ public:
 			pixels.destroy();
 			framePixels.destroy();
 		}
-
-		if (benchmark) {
-			delete benchmark;
-		}
 	}
 
 	void prepare() override final
@@ -381,7 +395,7 @@ public:
 		renderer.init(*vulkanDevice, queue, timer, model, asBuilder.getGeometryNodeBuffer());
 
 		if (mode == "benchmark") {
-			benchmark = new Benchmark(&renderer);
+			benchmark = std::make_unique<Benchmark>(&renderer);
 		}
 
 		renderer.setAccelerationStructure(asBuilder.getTLASHandle());

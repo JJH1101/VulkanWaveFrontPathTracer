@@ -57,8 +57,12 @@ vec3 CalculateNormal(sampler2D normalMap, vec3 normal, vec2 tex_coord, vec4 tang
     vec3 tangentNormal = texture(normalMap, tex_coord).xyz * 2.0 - 1.0;
 
     vec3 N = normalize(normal);
-    vec3 T = normalize(tangent.xyz);
-    vec3 B = tangent.w * normalize(cross(N, T));
+    // Interpolation can make the tangent non-orthogonal to the normal.
+    vec3 T = tangent.xyz - N * dot(N, tangent.xyz);
+    float tangentLengthSquared = dot(T, T);
+    if (!(tangentLengthSquared > 0.0)) return N;
+    T *= inversesqrt(tangentLengthSquared);
+    vec3 B = tangent.w * cross(N, T);
     mat3 TBN = mat3(T, B, N);
     return normalize(TBN * tangentNormal);
 }

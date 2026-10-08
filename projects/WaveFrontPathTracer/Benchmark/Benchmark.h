@@ -38,6 +38,7 @@ private:
 
     int frameCount;
     int view;
+    bool finished = false;
 
     struct viewInfos {
 		std::vector<glm::vec3> cameraPositions;
@@ -55,6 +56,7 @@ public:
     ~Benchmark(void);
 
     float run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels);
+    bool isFinished() const { return finished; }
 
 };
 

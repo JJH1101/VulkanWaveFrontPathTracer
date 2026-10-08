@@ -50,6 +50,7 @@ public:
 	void destroy(void);
 
 	ComputePass(void) = default;
-	~ComputePass(void) {
-	}
+	ComputePass(const ComputePass&) = delete;
+	ComputePass& operator=(const ComputePass&) = delete;
+	~ComputePass(void) { destroy(); }
 };

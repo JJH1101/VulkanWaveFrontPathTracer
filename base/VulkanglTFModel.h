@@ -270,11 +270,11 @@ namespace vkglTF
 	class Model {
 	private:
 		vkglTF::Texture* getTexture(uint32_t index);
-		vkglTF::Texture emptyTexture;
+		vkglTF::Texture emptyTexture{};
 		void createEmptyTexture(VkQueue transferQueue);
 	public:
-		vks::VulkanDevice* device;
-		VkDescriptorPool descriptorPool;
+		vks::VulkanDevice* device = nullptr;
+		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		struct Vertices {
 			int count = 0;
