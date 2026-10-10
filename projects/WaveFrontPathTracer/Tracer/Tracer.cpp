@@ -59,18 +59,18 @@ float Tracer::radixSort(vks::Buffer& keyBuffer, vks::Buffer& valueBuffer, vks::B
 
     timer->record(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
+    vks::util::memoryBarrier(commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
+
     vrdxCmdSortKeyValue(commandBuffer, sorter, size,
         keyBuffer.buffer, 0,
         valueBuffer.buffer, 0,
         storageBuffer.buffer, 0,
         nullptr, 0);
 
-    //vkCmdPipelineBarrier(
-    //	commandBuffer,
-    //	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // Src
-    //    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // Dst
-    //	0, 0, nullptr, 0, nullptr, 0, nullptr
-    //); // This barrier is needed or not?
     
     timer->record(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 

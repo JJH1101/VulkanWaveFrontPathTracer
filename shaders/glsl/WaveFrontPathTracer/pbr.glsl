@@ -40,13 +40,15 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
+    // Approximate perfect mirrors with a small, finite roughness, matching sampleGGX.
+    roughness = max(roughness, 0.04);
     float a = roughness * roughness;
     float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
+    float NdotH = clamp(dot(N, H), 0.0, 1.0);
     float NdotH2 = NdotH * NdotH;
 
     float nom = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    float denom = (1.0 - NdotH2) + NdotH2 * a2;
     denom = M_PI * denom * denom;
 
     return nom / denom;

@@ -30,6 +30,7 @@
   },
   "Scene": {
     "filename": "models/hairball/hairball.gltf",
+    "ASMode": "partitioned",
     "light": "10.0 15.0 5.0",
     "lightScale": 0.05,
     "headlight": false

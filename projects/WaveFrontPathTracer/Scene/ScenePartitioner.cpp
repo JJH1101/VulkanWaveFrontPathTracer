@@ -2,16 +2,20 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 scene::PartitionedScene scene::ScenePartitioner::partition(vkglTF::Model& scene, vks::VulkanDevice& device, VkQueue transferQueue) const
 {
 	PartitionedScene partitionedScene(device);
 
 	const uint32_t triangleCount = static_cast<uint32_t>(scene.indexBuffer.size() / 3);
+	if (triangleCount == 0 || scene.vertexBuffer.empty())
+		throw std::invalid_argument("Partitioning requires CPU triangle geometry");
 	const float sceneVolume = scene.dimensions.size.x * scene.dimensions.size.y * scene.dimensions.size.z;
-	const float cellWeight = std::cbrt(triangleCount / sceneVolume) * CELL_WEIGHT;
+	// Flat scenes use one cell; volumetric scenes retain the existing density heuristic.
+	const float cellWeight = sceneVolume > 0.0f ? std::cbrt(triangleCount / sceneVolume) * CELL_WEIGHT : 0.0f;
 
-	const glm::uvec3 numCells = glm::uvec3(scene.dimensions.size * cellWeight + 0.5f);
+	const glm::uvec3 numCells = glm::uvec3(glm::max(scene.dimensions.size * cellWeight + 0.5f, glm::vec3(1.0f)));
 	const glm::vec3 cellSize = scene.dimensions.size / glm::vec3(numCells);
 
 	std::vector<Aabb> cellBounds(numCells.x * numCells.y * numCells.z);
@@ -53,9 +57,13 @@ scene::PartitionedScene scene::ScenePartitioner::partition(vkglTF::Model& scene,
 							glm::vec3 triMinPos = glm::min(glm::min(triangle[0].pos, triangle[1].pos), triangle[2].pos);
 							glm::vec3 triMaxPos = glm::max(glm::max(triangle[0].pos, triangle[1].pos), triangle[2].pos);
 
-							if (cellBound.max.x < triMinPos.x || cellBound.min.x >= triMaxPos.x) continue;
-							if (cellBound.max.y < triMinPos.y || cellBound.min.y >= triMaxPos.y) continue;
-							if (cellBound.max.z < triMinPos.z || cellBound.min.z >= triMaxPos.z) continue;
+							// Shared boundary faces belong to the lower cell; the scene minimum has no lower cell.
+							if (cellBound.max.x < triMinPos.x || cellBound.min.x > triMaxPos.x ||
+								(cellBound.min.x == triMaxPos.x && cellBound.min.x != scene.dimensions.min.x)) continue;
+							if (cellBound.max.y < triMinPos.y || cellBound.min.y > triMaxPos.y ||
+								(cellBound.min.y == triMaxPos.y && cellBound.min.y != scene.dimensions.min.y)) continue;
+							if (cellBound.max.z < triMinPos.z || cellBound.min.z > triMaxPos.z ||
+								(cellBound.min.z == triMaxPos.z && cellBound.min.z != scene.dimensions.min.z)) continue;
 
 							Polygon clippedPolygon = clipTriangleAgainstAabb(triangle, cellBound);
 							if (clippedPolygon.size() < 3) continue;
@@ -258,7 +266,8 @@ vkglTF::Vertex scene::ScenePartitioner::interpolateVertex(
 
 	vkglTF::Vertex result{};
 	result.pos = glm::mix(from.pos, to.pos, t);
-	result.normal = glm::normalize(glm::mix(from.normal, to.normal, t));
+	// Preserve the original linear attribute field; unpackTriangle normalizes after interpolation.
+	result.normal = glm::mix(from.normal, to.normal, t);
 	result.uv = glm::mix(from.uv, to.uv, t);
 	result.color = glm::mix(from.color, to.color, t);
 	result.joint0 = glm::mix(from.joint0, to.joint0, t);

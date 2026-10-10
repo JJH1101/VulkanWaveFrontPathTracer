@@ -67,7 +67,7 @@ float Renderer::computeRayHits(RayBuffer& rays) {
     ComputePass::DispatchDesc dispatchDesc = { (rays.getSize() + workGroupSize - 1) / workGroupSize, 1, 1 };
     float time = countRayHitsPass.launchTimed(*timer, queue, dispatchDesc, {}, {}, pushConstantDescs);
 
-    device->copyBuffer(&counterDevice, &counterHost, queue);
+    vks::util::copyBufferToHost(*device, queue, counterDevice, counterHost);
     counterHost.map();
     numberOfHits = *static_cast<uint32_t*>(counterHost.mapped);
     counterHost.unmap();
@@ -290,7 +290,7 @@ float Renderer::reconstructSmooth(RayBuffer & irays, RayBuffer & orays, vks::Buf
     ComputePass::DispatchDesc dispatchDesc = { (numRays + workGroupSize - 1) / workGroupSize, 1, 1 };
     float time = reconstructSmoothPass.launchTimed(*timer, queue, dispatchDesc, descriptorSets, {}, pushConstantDescs);
 
-    device->copyBuffer(&counterDevice, &counterHost, queue);
+    vks::util::copyBufferToHost(*device, queue, counterDevice, counterHost);
     counterHost.map();
     uint32_t rayCount = *static_cast<uint32_t*>(counterHost.mapped);
     counterHost.unmap();
@@ -647,7 +647,10 @@ bool Renderer::getRussianRoulette() {
 }
 
 void Renderer::setRussianRoulette(bool russianRoulette) {
-	this->russianRoulette = russianRoulette;
+	if (this->russianRoulette != russianRoulette) {
+		this->russianRoulette = russianRoulette;
+		resetFrameIndex();
+	}
 }
 
 bool Renderer::getSortShadowRays() {

@@ -5,6 +5,7 @@
  */
 
 #include "ComputePass.h"
+#include "../Utils/BufferUtils.h"
 
 void ComputePass::createPipeline(vks::VulkanDevice& _device, const PipelineContext pipelineContext)
 {
@@ -74,6 +75,11 @@ void ComputePass::record(VkCommandBuffer commandBuffer,
 			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, pushConstantDesc.offset, pushConstantDesc.size, pushConstantDesc.data);
 	}
 
+	// Make previous dispatches and uploads visible to this pass, including buffer-reference accesses.
+	vks::util::memoryBarrier(commandBuffer,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+		VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 	vkCmdDispatch(commandBuffer, dispatchDesc.groupCountX, dispatchDesc.groupCountY, dispatchDesc.groupCountZ);
 }
 
@@ -102,12 +108,6 @@ float ComputePass::launchTimed(GPUTimer& timer,
 
 	timer.record(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 	record(commandBuffer, dispatchDesc, descriptorSets, dynamicOffsets, pushConstantDescs);
-	//vkCmdPipelineBarrier(
-	//	commandBuffer,
-	//	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // Src
-	//	VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // Dst
-	//	0, 0, nullptr, 0, nullptr, 0, nullptr
-	//); // This barrier is needed or not?
 	timer.record(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 	device->flushCommandBuffer(commandBuffer, queue, true);

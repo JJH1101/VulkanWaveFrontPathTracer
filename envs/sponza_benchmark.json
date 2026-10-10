@@ -30,6 +30,7 @@
   },
   "Scene": {
     "filename": "models/Sponza/Sponza.gltf",
+    "ASMode": "partitioned",
     "light": "0.0 10.0 0.0",
     "lightScale": 0.05,
     "headlight": false

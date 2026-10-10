@@ -54,6 +54,7 @@ vec3 cosineRandomVector(float r0, float r1, vec3 normal) {
 }
 
 vec3 sampleGGX(float r0, float r1, vec3 N, float roughness) {
+    roughness = max(roughness, 0.04); // Keep sampling consistent with DistributionGGX.
     float a = roughness * roughness;
     float a2 = a * a;
 

@@ -30,6 +30,7 @@
   },
   "Scene": {
     "filename": "models/BistroExterior/BistroExterior.gltf",
+    "ASMode": "partitioned",
     "light": "25.0 100.0 5.0",
     "lightScale": 0.05,
     "headlight": false

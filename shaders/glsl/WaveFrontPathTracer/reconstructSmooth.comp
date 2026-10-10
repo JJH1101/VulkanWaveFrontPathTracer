@@ -171,11 +171,9 @@ void main() {
                 float pd = max(max(kD.x, kD.y), kD.z);
                 float ps = max(max(F.x, F.y), F.z);
 
-                // Material scale.
+                // Normalize selection probabilities, not the BSDF itself.
                 if(pd + ps > 1.0f) {
                     float s = 1.0f / (pd + ps);
-                    kD *= s;
-                    F *= s;
                     pd *= s;
                     ps *= s;
                 }
@@ -186,13 +184,13 @@ void main() {
                 float r2 = randf(seed);
 
                 // Russian roulette off => normalize probabilities.
-                if (pc.russianRoulette == 0) {
+                if (pc.russianRoulette == 0 && pd + ps > 0.0f) {
                     float s = 1.0f / (pd + ps);
                     pd *= s;
                     ps *= s;
                 }
 
-                 if (r2 <= pd + ps) {
+                if (r2 < pd + ps && NdotV > 0.0f) {
                     pathRay.origin = hitPos + tri.normal * EPSILON;
                     pathRay.tmin = EPSILON;
                     pathRay.tmax = MAX_FLOAT;
@@ -200,17 +198,31 @@ void main() {
                     // Cosine distributed ray.
                     if(r2 < pd) {
                         pathRay.direction = cosineRandomVector(r0, r1, tri.normal);
-                        weight = min(kD / (pd + ps), vec3(1.0f));
                     }
                     // Glossy distributed ray.
                     else {
                         H = sampleGGX(r0, r1, tri.normal, aoRoughnessMetallic.g);
                         pathRay.direction = reflect(inputRay.direction, H);
-                        weight = min(F / (pd + ps), vec3(1.0f));
                     }
 
-                    generatePathRay = true;
-                 }
+                    // Evaluate the full BSDF with the mixture PDF, including roulette survival.
+                    float NdotWi = max(dot(tri.normal, pathRay.direction), 0.0f);
+                    if (NdotWi > 0.0f) {
+                        H = normalize(pathRay.direction - inputRay.direction);
+                        float VdotH = max(dot(-inputRay.direction, H), 0.0f);
+                        float NdotH = max(dot(tri.normal, H), 0.0f);
+                        float D = DistributionGGX(tri.normal, H, aoRoughnessMetallic.g);
+                        float G = GeometrySmith(NdotWi, NdotV, aoRoughnessMetallic.g);
+                        vec3 pathF = FresnelSchlick(VdotH, F0);
+                        vec3 pathKD = (vec3(1.0f) - pathF) * (1.0f - aoRoughnessMetallic.b) * tri.color.rgb;
+                        vec3 bsdf = pathKD / M_PI + D * G * pathF / (4.0f * NdotWi * NdotV);
+                        float pdf = pd * NdotWi / M_PI + ps * D * NdotH / (4.0f * VdotH);
+                        if (pdf > 0.0f) {
+                            weight = bsdf * NdotWi / pdf;
+                            generatePathRay = !any(isnan(weight)) && !any(isinf(weight));
+                        }
+                    }
+                }
 
                 // Save seed.
                 seeds.data[taskIndex] = seed;

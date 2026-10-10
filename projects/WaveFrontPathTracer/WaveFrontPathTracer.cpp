@@ -16,8 +16,19 @@
 #include "Scene/ASBuilder.h"
 
 #include <stdexcept>
+#include <cmath>
+#include <limits>
+#include <iostream>
 
 #include <memory>
+
+#if defined(_WIN32)
+#include <conio.h>
+#elif defined(__linux__) && !defined(__ANDROID__)
+#include <poll.h>
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 #if defined(__ANDROID__)
 #include "jni.h"
@@ -164,19 +175,6 @@ private:
 			? fileLoadingFlags | vkglTF::FileLoadingFlags::KeepCpuGeometry
 			: fileLoadingFlags;
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue, loadingFlags);
-		if (buildFlags == scene::ASBuilder::BuildFlags::Partitioned) {
-			// Match the grid bounds to the pre-transformed vertices, not local primitive bounds.
-			auto& bounds = model.dimensions;
-			bounds.min = glm::vec3(FLT_MAX);
-			bounds.max = glm::vec3(-FLT_MAX);
-			for (const auto& vertex : model.vertexBuffer) {
-				bounds.min = glm::min(bounds.min, vertex.pos);
-				bounds.max = glm::max(bounds.max, vertex.pos);
-			}
-			bounds.size = bounds.max - bounds.min;
-			bounds.center = (bounds.min + bounds.max) * 0.5f;
-			bounds.radius = glm::length(bounds.size) * 0.5f;
-		}
 	}
 
 	float draw()
@@ -223,6 +221,8 @@ private:
 		renderPassBeginInfo.framebuffer = frameBuffers[currentImageIndex];
 
 		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+		vks::util::memoryBarrier(cmdBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
 		
 		vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -265,6 +265,35 @@ private:
 		VulkanExampleBase::submitFrame();
 		if (benchmark && benchmark->isFinished()) {
 			prepared = false;
+#if defined(_WIN32)
+			std::cout << "Benchmark complete. Press Esc to exit." << std::endl;
+			while (true) {
+				const int key = _getch();
+				if (key == 27) break;
+				if (key == 0 || key == 0xE0) _getch(); // Consume extended-key scan codes.
+			}
+#elif defined(__linux__) && !defined(__ANDROID__)
+			termios savedMode{};
+			if (isatty(STDIN_FILENO) && tcgetattr(STDIN_FILENO, &savedMode) == 0) {
+				termios inputMode = savedMode;
+				inputMode.c_lflag &= ~(ICANON | ECHO | ISIG);
+				inputMode.c_cc[VMIN] = 1;
+				inputMode.c_cc[VTIME] = 0;
+				if (tcsetattr(STDIN_FILENO, TCSANOW, &inputMode) == 0) {
+					std::cout << "Benchmark complete. Press Esc to exit." << std::endl;
+					unsigned char key;
+					while (read(STDIN_FILENO, &key, 1) == 1) {
+						// Ignore Esc-prefixed arrow/function keys.
+						pollfd input{ STDIN_FILENO, POLLIN, 0 };
+						if (key == 27 && poll(&input, 1, 50) == 0) break;
+					}
+					tcsetattr(STDIN_FILENO, TCSANOW, &savedMode);
+				}
+			}
+#elif !defined(VK_USE_PLATFORM_ANDROID_KHR)
+			std::cout << "Benchmark complete. Press Enter to exit." << std::endl;
+			std::cin.get();
+#endif
 #if defined(_WIN32)
 			PostQuitMessage(0);
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
@@ -350,6 +379,9 @@ public:
 		int w, h;
 		env->getIntValue("Resolution.width", w);
 		env->getIntValue("Resolution.height", h);
+		if (w <= 0 || h <= 0 || static_cast<uint64_t>(w) * h > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
+			vks::tools::exitFatal("Resolution must be positive and the pixel count must fit in an int", -1);
+		}
 		width = static_cast<uint32_t>(w);
 		height = static_cast<uint32_t>(h);
 
@@ -360,6 +392,10 @@ public:
 		env->getFloatValue("Camera.nearPlane", nearPlane);
 		env->getFloatValue("Camera.farPlane", farPlane);
 		env->getFloatValue("Camera.fieldOfView", fov);
+		if (!std::isfinite(nearPlane) || !std::isfinite(farPlane) || !std::isfinite(fov) ||
+			nearPlane <= 0.0f || farPlane <= nearPlane || fov <= 0.0f || fov >= 180.0f) {
+			vks::tools::exitFatal("Camera requires 0 < nearPlane < farPlane and 0 < fieldOfView < 180", -1);
+		}
 
 		camera.type = Camera::CameraType::firstperson;
 		camera.setPerspective(fov, (float)width / (float)height, nearPlane, farPlane);

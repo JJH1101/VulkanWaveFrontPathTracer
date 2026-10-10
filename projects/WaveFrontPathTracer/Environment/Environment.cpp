@@ -11,6 +11,7 @@
 #include <sstream>
 #include <algorithm>
 #include <utility>
+#include <cmath>
 #include "../../../external/tinygltf/json.hpp"
 #include "VulkanTools.h"
 
@@ -21,17 +22,21 @@ std::unique_ptr<Environment> Environment::instance;
 bool Environment::filterValue(const std::string & value, std::string & filteredValue, OptType type) {
     bool valid = true;
     if (type == OPT_INT) {
-        try {
-            int val = std::stoi(value);
-            filteredValue = std::to_string(val);
-        } catch (...) {
-            valid = false;
+        std::stringstream ss(value);
+        int val;
+        valid = static_cast<bool>(ss >> val);
+        if (valid) {
+            ss >> std::ws;
+            valid = ss.eof();
+            filteredValue = value;
         }
     }
     else if (type == OPT_FLOAT) {
         try {
-            float val = std::stof(value);
-            filteredValue = std::to_string(val);
+            size_t parsed;
+            float val = std::stof(value, &parsed);
+            valid = std::isfinite(val) && value.find_first_not_of(" \t\r\n", parsed) == std::string::npos;
+            filteredValue = value;
         } catch (...) {
             valid = false;
         }
@@ -52,14 +57,11 @@ bool Environment::filterValue(const std::string & value, std::string & filteredV
     else if (type == OPT_VECTOR) {
         std::stringstream ss(value);
         float v[3];
-        int count = 0;
-        while (ss >> v[count]) {
-            count++;
-            if (count == 3) break;
-        }
-        valid = (count == 3);
+        valid = static_cast<bool>(ss >> v[0] >> v[1] >> v[2]);
         if (valid) {
-            filteredValue = std::to_string(v[0]) + " " + std::to_string(v[1]) + " " + std::to_string(v[2]);
+            ss >> std::ws;
+            valid = ss.eof() && std::isfinite(v[0]) && std::isfinite(v[1]) && std::isfinite(v[2]);
+            filteredValue = value;
         }
     }
     else {
@@ -175,7 +177,9 @@ bool Environment::getVectorValue(const std::string & name, glm::vec3 & value) {
         return false;
     }
     std::stringstream ss(valStr);
-    ss >> value.x >> value.y >> value.z;
+    glm::vec3 parsed;
+    if (!(ss >> parsed.x >> parsed.y >> parsed.z)) return false;
+    value = parsed;
     return true;
 }
 
@@ -251,7 +255,7 @@ bool Environment::getVectorValues(const std::string & name, std::vector<glm::vec
         for (auto& vStr : opt.values) {
             glm::vec3 v;
             std::stringstream ss(vStr);
-            ss >> v.x >> v.y >> v.z;
+            if (!(ss >> v.x >> v.y >> v.z)) return false;
             values.push_back(v);
         }
         return true;
@@ -259,7 +263,7 @@ bool Environment::getVectorValues(const std::string & name, std::vector<glm::vec
     else if (!opt.defaultValue.empty()) {
         glm::vec3 v;
         std::stringstream ss(opt.defaultValue);
-        ss >> v.x >> v.y >> v.z;
+        if (!(ss >> v.x >> v.y >> v.z)) return false;
         values.push_back(v);
         return true;
     }
@@ -352,13 +356,18 @@ bool Environment::readEnvFile(const std::string & filename) {
         if (found) {
             opt.values.clear();
             auto process_element = [&](const json& el) {
+                std::string value;
                 if (el.is_string()) {
-                    opt.values.push_back(el.get<std::string>());
+                    value = el.get<std::string>();
                 } else if (el.is_boolean()) {
-                    opt.values.push_back(el.get<bool>() ? "1" : "0");
+                    value = el.get<bool>() ? "1" : "0";
                 } else {
-                    opt.values.push_back(el.dump());
+                    value = el.dump();
                 }
+                std::string filtered;
+                if (!filterValue(value, filtered, opt.type))
+                    vks::tools::exitFatal("Invalid value for environment option '" + name + "': " + value, -1);
+                opt.values.push_back(filtered);
             };
 
             if (current->is_array()) {

@@ -4,6 +4,10 @@
 #include "gpuTimer.h"
 
 namespace vks::util {
+
+	void memoryBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStage, VkAccessFlags srcAccess, VkPipelineStageFlags dstStage, VkAccessFlags dstAccess);
+
+	void copyBufferToHost(vks::VulkanDevice& device, VkQueue queue, vks::Buffer& src, vks::Buffer& dst);
 	
 	void resizeBuffer(vks::VulkanDevice& device, VkQueue queue, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, vks::Buffer* buffer, VkDeviceSize size);
 	
