@@ -24,6 +24,8 @@
 #include "../Utils/gpuTimer.h"
 #include "../Tracer/Tracer.h"
 
+namespace scene { class ASBuilder; }
+
 #define RENDERER_MAX_KEY_VALUE 2.0f
 #define RENDERER_MAX_WHITE_POINT 2.0f
 #define RENDERER_MAX_RADIUS 100.0f
@@ -75,6 +77,7 @@ public:
         PRIMARY_RAYS,
         SHADOW_RAYS,
         PATH_RAYS,
+        CELL_RAYS,
         MAX_RAYS
     };
 
@@ -97,6 +100,7 @@ private:
     ComputePass interpolateColorsPass;
     ComputePass reconstructSmoothPass;
     ComputePass reconstructShadowPass;
+    ComputePass reconstructCellsPass;
 
     struct PushConstantsInitSeeds {
         uint64_t seedAddr;
@@ -112,6 +116,15 @@ private:
         int sampleIndex;
         glm::ivec2 size;
         float maxDist;
+    };
+
+    struct PushConstantsReconstructCells {
+        uint64_t inputResultAddr;
+        uint64_t indexToPixelAddr;
+        uint64_t pixelAddr;
+        uint64_t geometryBaseAddr;
+        uint32_t numberOfRays;
+        uint32_t cellCount;
     };
 
     struct PushConstantsCountRayHits {
@@ -223,6 +236,7 @@ private:
     vks::Buffer seeds;
     vks::Buffer counterDevice;
     vks::Buffer counterHost;
+    vks::Buffer geometryBaseBuffer;
 
     RayType stringToRayType(const std::string & rayType);
 
@@ -234,6 +248,7 @@ private:
     float raygenPrimary(Camera& camera, glm::ivec2& extent, int sampleIndex);
 
     float renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
+    float renderCells(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels);
     float renderPath(Camera& camera, glm::ivec2 extent, vks:: Buffer& pixels);
 
@@ -253,7 +268,7 @@ public:
     Renderer& operator=(const Renderer&) = delete;
 
     void init(vks::VulkanDevice& device, VkQueue queue, GPUTimer& timer,
-        vkglTF::Model& model, const vks::Buffer& geometryNodeBuffer);
+        vkglTF::Model& model);
 
     RayType getRayType(void);
     void setRayType(RayType rayType);
@@ -284,7 +299,8 @@ public:
 
     bool getPrintBounceLogs(void);
 
-    void setAccelerationStructure(VkAccelerationStructureKHR topLevelAS);
+    // Call after init and AS build, while the GPU is idle. AS resources remain borrowed.
+    void setASResources(const scene::ASBuilder& asBuilder);
 
     float render(Camera & camera, glm::ivec2 extent, vks::Buffer & pixels, vks::Buffer & framePixels);
 

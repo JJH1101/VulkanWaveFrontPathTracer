@@ -16,6 +16,7 @@
 #include "Renderer.h"
 #include "../Utils/BufferUtils.h"
 #include "../Environment/Environment.h"
+#include "../Scene/ASBuilder.h"
 #include <bit>
 #include <array>
 #include <cmath>
@@ -48,6 +49,8 @@ Renderer::RayType Renderer::stringToRayType(const std::string & rayType) {
         return SHADOW_RAYS;
     else if (rayType == "path")
         return PATH_RAYS;
+    else if (rayType == "cells")
+        return CELL_RAYS;
     else
         return PRIMARY_RAYS;
 }
@@ -118,6 +121,24 @@ float Renderer::renderPrimary(Camera& camera, glm::ivec2 extent, vks::Buffer& pi
 	primaryTraceTime += traceTime;
 
 	return time;
+}
+
+float Renderer::renderCells(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
+    // Fixed sample: stable debug colors without accumulation or tone mapping.
+    float time = raygenPrimary(camera, extent, 1);
+    time += tracer.trace(primaryRays);
+
+    PushConstantsReconstructCells pc{};
+    pc.inputResultAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, primaryRays.getResultBuffer().buffer);
+    pc.indexToPixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, primaryRays.getIndexToPixelBuffer().buffer);
+    pc.pixelAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, pixels.buffer);
+    pc.geometryBaseAddr = vks::util::getBufferDeviceAddress(device->logicalDevice, geometryBaseBuffer.buffer);
+    pc.numberOfRays = primaryRays.getSize();
+    pc.cellCount = static_cast<uint32_t>(geometryBaseBuffer.size / sizeof(uint32_t));
+
+    ComputePass::DispatchDesc dispatchDesc = { (pc.numberOfRays + workGroupSize - 1) / workGroupSize, 1, 1 };
+    return time + reconstructCellsPass.launchTimed(*timer, queue, dispatchDesc, {}, {},
+        { { 0, sizeof(PushConstantsReconstructCells), &pc } });
 }
 
 float Renderer::renderShadow(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels) {
@@ -391,6 +412,7 @@ Renderer::~Renderer() {
     seeds.destroy();
     counterDevice.destroy();
     counterHost.destroy();
+    geometryBaseBuffer.destroy();
 }
 
 void Renderer::createDescriptorSet(vkglTF::Model& model) {
@@ -447,12 +469,11 @@ void Renderer::createDescriptorSet(vkglTF::Model& model) {
 }
 
 void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer,
-    vkglTF::Model& model, const vks::Buffer& geometryNodeBuffer) {
+    vkglTF::Model& model) {
 
     this->device = &_device;
     this->timer = &_timer;
     this->queue = _queue;
-    geometryNodeAddress = geometryNodeBuffer.deviceAddress;
 
     tracer.init(*device, *timer, queue);
 
@@ -486,6 +507,11 @@ void Renderer::init(vks::VulkanDevice& _device, VkQueue _queue, GPUTimer& _timer
     pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "raygenPrimary.comp.spv";
     pipelineContext.pushConstantRanges = { pushConstantRange };
     raygenPrimaryPass.createPipeline(*device, pipelineContext);
+
+    // Create reconstructCells pipeline (buffer addresses only, no descriptor set).
+    pipelineContext.shaderEntry.filePath = std::string(shaderPath) + "reconstructCells.comp.spv";
+    pipelineContext.pushConstantRanges = { { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantsReconstructCells) } };
+    reconstructCellsPass.createPipeline(*device, pipelineContext);
 
     // Create reconstructSmooth pipeline
 	createDescriptorSet(model);
@@ -689,8 +715,19 @@ bool Renderer::getPrintBounceLogs(void) {
 	return printBounceLogs;
 }
 
-void Renderer::setAccelerationStructure(VkAccelerationStructureKHR topLevelAS) {
-    tracer.setAccererationStructure(topLevelAS);
+void Renderer::setASResources(const scene::ASBuilder& asBuilder) {
+    tracer.setAccererationStructure(asBuilder.getTLASHandle());
+    geometryNodeAddress = asBuilder.getGeometryNodeBuffer().deviceAddress;
+
+    if (rayType == CELL_RAYS) {
+        auto geometryBases = asBuilder.getGeometryBases();
+        geometryBaseBuffer.destroy();
+        VK_CHECK_RESULT(device->createBuffer(
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            &geometryBaseBuffer, geometryBases.size() * sizeof(uint32_t), geometryBases.data()));
+    }
+    resetFrameIndex();
 }
 
 float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
@@ -754,6 +791,9 @@ float Renderer::render(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, v
             pathBounceLogs[i].traceTime = 0.0f;
         }
     }
+
+    if (rayType == CELL_RAYS)
+        return renderCells(camera, extent, framePixels);
 
     if (headlight)
         light = camera.position;

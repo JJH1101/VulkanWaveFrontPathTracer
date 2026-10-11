@@ -1,0 +1,48 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "ray.glsl"
+#include "bufferReferences.glsl"
+
+layout(push_constant) uniform PushConstants {
+    uint64_t inputResultAddr;
+    uint64_t indexToPixelAddr;
+    uint64_t pixelAddr;
+    uint64_t geometryBaseAddr;
+    uint numberOfRays;
+    uint cellCount;
+} pc;
+
+layout(local_size_x = 256) in;
+void main() {
+    uint task = gl_GlobalInvocationID.x;
+    if (task >= pc.numberOfRays) return;
+
+    RayResult result = RayResultBufferRO(pc.inputResultAddr).data[task];
+    int pixel = IntBufferRO(pc.indexToPixelAddr).data[task];
+    vec3 color = vec3(0.04);
+    if (result.geometryId >= 0 && pc.cellCount > 0) {
+        UintBufferRO bases = UintBufferRO(pc.geometryBaseAddr);
+        uint cellId = 0;
+        uint end = pc.cellCount;
+
+        while (cellId + 1 < end) {
+            uint mid = cellId + (end - cellId) / 2;
+
+            if (bases.data[mid] <= uint(result.geometryId))
+                cellId = mid;
+            else
+                end = mid;
+        }
+
+        // Golden-ratio hue spacing; vary saturation/value to spread the palette.
+        float hue = fract(0.08 + float(cellId) * 0.618033989);
+        float saturation = 0.65 + 0.25 * fract(float(cellId) * 0.754877666);
+        float value = 0.75 + 0.25 * fract(float(cellId) * 0.569840291);
+        vec3 rgb = clamp(abs(fract(hue + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+        color = value * mix(vec3(1.0), rgb, saturation);
+    }
+    Vec4BufferWO(pc.pixelAddr).data[pixel] = vec4(color, 1.0);
+}

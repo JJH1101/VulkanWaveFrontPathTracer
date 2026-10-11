@@ -439,13 +439,13 @@ public:
 		createPipelines();
 
 		timer.init(*vulkanDevice);
-		renderer.init(*vulkanDevice, queue, timer, model, asBuilder.getGeometryNodeBuffer());
+		renderer.init(*vulkanDevice, queue, timer, model);
 
 		if (mode == "benchmark") {
 			benchmark = std::make_unique<Benchmark>(&renderer);
 		}
 
-		renderer.setAccelerationStructure(asBuilder.getTLASHandle());
+		renderer.setASResources(asBuilder);
 
 		lastTimestamp = std::chrono::high_resolution_clock::now();
 

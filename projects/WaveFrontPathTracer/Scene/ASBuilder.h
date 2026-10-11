@@ -24,6 +24,7 @@ namespace scene
         void build(vkglTF::Model& model, BuildFlags flags = BuildFlags::Default, float parameter = 0.1f);
         VkAccelerationStructureKHR getTLASHandle() const noexcept { return topLevelAS.handle; }
         const vks::Buffer& getGeometryNodeBuffer() const noexcept { return geometryNodeBuffer; }
+        std::vector<uint32_t> getGeometryBases() const;
 
     private:
         struct ScratchBuffer

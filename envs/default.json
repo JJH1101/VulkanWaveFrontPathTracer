@@ -16,7 +16,7 @@
   },
   "Renderer": {
     "samplesPerPixel": 1,
-    "rayType": "path",
+    "rayType": "cells",
     "recursionDepth": 4,
     "keyValue": 0.6,
     "whitePoint": 2.0,

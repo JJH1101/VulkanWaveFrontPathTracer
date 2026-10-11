@@ -88,6 +88,14 @@ void scene::ASBuilder::build(vkglTF::Model& model, BuildFlags flags, float param
     }
 }
 
+std::vector<uint32_t> scene::ASBuilder::getGeometryBases() const
+{
+    std::vector<uint32_t> bases;
+    bases.reserve(bottomLevelAS.size());
+    for (const auto& blas : bottomLevelAS) bases.push_back(blas.geometryBase);
+    return bases;
+}
+
 void scene::ASBuilder::CreatePartitionedBottomLevelAccelerationStructure(vkglTF::Model& model,
     BuildFlags flags, float parameter)
 {
