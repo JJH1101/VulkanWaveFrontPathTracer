@@ -70,7 +70,11 @@ namespace scene
 		ScenePartitioner() = default;
         ~ScenePartitioner() = default;
 
-        PartitionedScene partition(vkglTF::Model& scene, vks::VulkanDevice& device, VkQueue transferQueue) const;
+        std::vector<Aabb> createUniformGrid(const vkglTF::Model& scene, float cellWeight) const;
+        PartitionedScene partition(vkglTF::Model& scene, vks::VulkanDevice& device,
+            VkQueue transferQueue, const std::vector<Aabb>& cellBounds) const;
+
+        Polygon clipTriangleAgainstAabb(const Triangle& triangle, const Aabb& bounds) const;
 
 	private:
 		enum class Axis : uint32_t
@@ -86,18 +90,12 @@ namespace scene
 			Max,
 		};
         
-        static constexpr float CELL_WEIGHT = 0.1f;
-
 		void clipPolygonAgainstPlane(
 			const Polygon& from,
 			Polygon& to,
 			float boundary,
 			Axis axis,
 			Side side) const;
-
-        Polygon clipTriangleAgainstAabb(
-			const Triangle& triangle,
-			const Aabb& bounds) const;
 
 		bool isInside(
 			float coord,

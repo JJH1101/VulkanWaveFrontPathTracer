@@ -2,34 +2,56 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
-scene::PartitionedScene scene::ScenePartitioner::partition(vkglTF::Model& scene, vks::VulkanDevice& device, VkQueue transferQueue) const
+std::vector<scene::Aabb> scene::ScenePartitioner::createUniformGrid(const vkglTF::Model& scene, float cellWeight) const
 {
-	PartitionedScene partitionedScene(device);
-
-	const uint32_t triangleCount = static_cast<uint32_t>(scene.indexBuffer.size() / 3);
-	if (triangleCount == 0 || scene.vertexBuffer.empty())
-		throw std::invalid_argument("Partitioning requires CPU triangle geometry");
-	const float sceneVolume = scene.dimensions.size.x * scene.dimensions.size.y * scene.dimensions.size.z;
+	if (!std::isfinite(cellWeight) || cellWeight <= 0.0f)
+		throw std::invalid_argument("UniformGrid requires a positive finite cell weight");
+	const auto& bounds = scene.dimensions;
+	const glm::vec3 sceneSize = bounds.max - bounds.min;
+	const double sceneVolume = double(sceneSize.x) * sceneSize.y * sceneSize.z;
 	// Flat scenes use one cell; volumetric scenes retain the existing density heuristic.
-	const float cellWeight = sceneVolume > 0.0f ? std::cbrt(triangleCount / sceneVolume) * CELL_WEIGHT : 0.0f;
-
-	const glm::uvec3 numCells = glm::uvec3(glm::max(scene.dimensions.size * cellWeight + 0.5f, glm::vec3(1.0f)));
-	const glm::vec3 cellSize = scene.dimensions.size / glm::vec3(numCells);
-
-	std::vector<Aabb> cellBounds(numCells.x * numCells.y * numCells.z);
-
-	auto calcIdx = [numCells](glm::uvec3 idx)->uint32_t {return numCells.x * numCells.y * idx.z + numCells.x * idx.y + idx.x; };
+	const double density = sceneVolume > 0.0 ? std::cbrt((scene.indexBuffer.size() / 3) / sceneVolume) * cellWeight : 0.0;
+	glm::uvec3 numCells;
+	size_t cellCount = 1;
+	for (uint32_t axis = 0; axis < 3; ++axis) {
+		const double count = std::max(double(sceneSize[axis]) * density + 0.5, 1.0);
+		if (!std::isfinite(bounds.min[axis]) || !std::isfinite(bounds.max[axis]) || sceneSize[axis] < 0.0f ||
+			!std::isfinite(count) || count > std::numeric_limits<uint32_t>::max())
+			throw std::invalid_argument("Invalid UniformGrid bounds or cell count");
+		numCells[axis] = static_cast<uint32_t>(count);
+		if (cellCount > std::vector<Aabb>{}.max_size() / numCells[axis])
+			throw std::overflow_error("UniformGrid cell count is too large");
+		cellCount *= numCells[axis];
+	}
+	const glm::vec3 cellSize = sceneSize / glm::vec3(numCells);
+	std::vector<Aabb> cellBounds(cellCount);
+	auto calcIdx = [numCells](glm::uvec3 idx)->size_t {return size_t(numCells.x) * numCells.y * idx.z + size_t(numCells.x) * idx.y + idx.x; };
 	for(uint32_t z = 0; z < numCells.z; ++z) {
 		for(uint32_t y = 0; y < numCells.y; ++y) {
 			for(uint32_t x = 0; x < numCells.x; ++x) {
-				const uint32_t idx = calcIdx(glm::uvec3(x, y, z));
-				cellBounds[idx].min = scene.dimensions.min + glm::vec3(x, y, z) * cellSize;
-				cellBounds[idx].max = cellBounds[idx].min + cellSize;
+				const size_t idx = calcIdx(glm::uvec3(x, y, z));
+				cellBounds[idx].min = bounds.min + glm::vec3(x, y, z) * cellSize;
+				// Evaluate shared boundaries identically; pin the outer faces to scene bounds.
+				for (uint32_t axis = 0; axis < 3; ++axis) {
+					const uint32_t next = glm::uvec3(x, y, z)[axis] + 1;
+					cellBounds[idx].max[axis] = next == numCells[axis] ? bounds.max[axis]
+						: bounds.min[axis] + float(next) * cellSize[axis];
+				}
 			}
 		}
 	}
+	return cellBounds;
+}
+
+scene::PartitionedScene scene::ScenePartitioner::partition(vkglTF::Model& scene,
+	vks::VulkanDevice& device, VkQueue transferQueue, const std::vector<Aabb>& cellBounds) const
+{
+	PartitionedScene partitionedScene(device);
+	if (scene.indexBuffer.empty() || scene.indexBuffer.size() % 3 || scene.vertexBuffer.empty() || cellBounds.empty())
+		throw std::invalid_argument("Partitioning requires CPU triangles and cell bounds");
 
 	std::vector<uint32_t> partitionedIndices;
 	std::vector<vkglTF::Vertex> partitionedVertices;
@@ -200,6 +222,7 @@ void scene::ScenePartitioner::clipPolygonAgainstPlane(
 					const float t = std::abs(from[indexPrev].pos[axisIndex] - boundary) / 
 						std::abs(from[indexPrev].pos[axisIndex] - from[indexCur].pos[axisIndex]);
 					to.push_back(interpolateVertex(from[indexPrev], from[indexCur], t));
+					to.back().pos[axisIndex] = boundary;
 				}
 
 			}
@@ -210,6 +233,7 @@ void scene::ScenePartitioner::clipPolygonAgainstPlane(
 					const float t = std::abs(from[indexPrev].pos[axisIndex] - boundary) / 
 						std::abs(from[indexPrev].pos[axisIndex] - from[indexCur].pos[axisIndex]);
 					to.push_back(interpolateVertex(from[indexPrev], from[indexCur], t));
+					to.back().pos[axisIndex] = boundary;
 				}
 			}
 			else { // prev out & cur out

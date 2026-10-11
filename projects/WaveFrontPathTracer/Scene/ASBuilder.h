@@ -9,7 +9,7 @@ namespace scene
     class ASBuilder
     {
     public:
-        enum class BuildFlags { Default, Partitioned };
+        enum class BuildFlags { Default, UniformGrid, KdTreeLeaves, AdaptiveGrid };
 
         ASBuilder() = default;
         ~ASBuilder();
@@ -20,7 +20,8 @@ namespace scene
         void init(vks::VulkanDevice& device, VkQueue queue);
         // Synchronous full rebuild. Model must outlive rendering; Default borrows its buffers.
         // Partitioned requires retained CPU geometry in scene/world coordinates.
-        void build(vkglTF::Model& model, BuildFlags flags = BuildFlags::Default);
+        // parameter is cell weight for UniformGrid, CT/CI for KdTreeLeaves/AdaptiveGrid.
+        void build(vkglTF::Model& model, BuildFlags flags = BuildFlags::Default, float parameter = 0.1f);
         VkAccelerationStructureKHR getTLASHandle() const noexcept { return topLevelAS.handle; }
         const vks::Buffer& getGeometryNodeBuffer() const noexcept { return geometryNodeBuffer; }
 
@@ -57,10 +58,10 @@ namespace scene
             float _padding1;
         };
 
-        // Both modes share the geometry preparation and batch BLAS build implementation.
+        // All modes share the geometry preparation and batch BLAS build implementation.
         void CreateBottomLevelAccelerationStructure(vkglTF::Model& model,
             const PartitionedScene* partitioned = nullptr);
-        void CreatePartitionedBottomLevelAccelerationStructure(vkglTF::Model& model);
+        void CreatePartitionedBottomLevelAccelerationStructure(vkglTF::Model& model, BuildFlags flags, float parameter);
         void CreateTopLevelAccelerationStructure();
         void clear();
 

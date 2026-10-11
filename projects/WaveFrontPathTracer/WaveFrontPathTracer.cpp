@@ -64,6 +64,7 @@ private:
 	vkglTF::Model model;
 	scene::ASBuilder asBuilder;
 	scene::ASBuilder::BuildFlags buildFlags = scene::ASBuilder::BuildFlags::Default;
+	float asParameter = 0.1f;
 	GPUTimer timer;
 	Renderer renderer;
 
@@ -171,7 +172,7 @@ private:
 		std::string sceneFile;
 		Environment::getInstance()->getStringValue("Scene.filename", sceneFile);
 		// Cell bounds and partitioned BLASes use world-space CPU vertices.
-		const uint32_t loadingFlags = buildFlags == scene::ASBuilder::BuildFlags::Partitioned
+		const uint32_t loadingFlags = buildFlags != scene::ASBuilder::BuildFlags::Default
 			? fileLoadingFlags | vkglTF::FileLoadingFlags::KeepCpuGeometry
 			: fileLoadingFlags;
 		model.loadFromFile(getAssetPath() + sceneFile, vulkanDevice, queue, loadingFlags);
@@ -364,11 +365,21 @@ public:
 		if (asMode == "default") {
 			buildFlags = scene::ASBuilder::BuildFlags::Default;
 		}
-		else if (asMode == "partitioned") {
-			buildFlags = scene::ASBuilder::BuildFlags::Partitioned;
+		else if (asMode == "uniform_grid" || asMode == "partitioned") { // Legacy env alias.
+			buildFlags = scene::ASBuilder::BuildFlags::UniformGrid;
+		}
+		else if (asMode == "kd_tree_leaves") {
+			buildFlags = scene::ASBuilder::BuildFlags::KdTreeLeaves;
+		}
+		else if (asMode == "adaptive_grid") {
+			buildFlags = scene::ASBuilder::BuildFlags::AdaptiveGrid;
 		}
 		else {
 			throw std::invalid_argument("Unknown Scene.ASMode: " + asMode);
+		}
+		env->getFloatValue("Scene.ASParameter", asParameter);
+		if (buildFlags != scene::ASBuilder::BuildFlags::Default && (!std::isfinite(asParameter) || asParameter <= 0.0f)) {
+			throw std::invalid_argument("Scene.ASParameter must be positive and finite");
 		}
 
 #if defined(_WIN32)
@@ -423,7 +434,7 @@ public:
 
 		// Create the acceleration structures used to render the ray traced scene
 		asBuilder.init(*vulkanDevice, queue);
-		asBuilder.build(model, buildFlags);
+		asBuilder.build(model, buildFlags, asParameter);
 
 		createPipelines();
 

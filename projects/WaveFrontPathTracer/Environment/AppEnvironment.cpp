@@ -23,6 +23,7 @@ void AppEnvironment::registerOptions() {
 
     registerOption("Scene.filename", OPT_STRING);
     registerOption("Scene.ASMode", "default", OPT_STRING);
+    registerOption("Scene.ASParameter", "0.1", OPT_FLOAT);
     registerOption("Scene.light", "5.0 -2.0 1.0", OPT_VECTOR);
     registerOption("Scene.lightScale", "0.001", OPT_FLOAT);
     registerOption("Scene.headlight", "0", OPT_BOOL);

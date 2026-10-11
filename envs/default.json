@@ -7,7 +7,8 @@
     "height": 720
   },
   "Scene": {
-    "ASMode": "partitioned",
+    "ASMode": "kd_tree_leaves",
+    "ASParameter": 2048.0,
     "filename": "models/Sponza/Sponza.gltf",
     "light": "0.0 10.0 0.0",
     "lightScale": 0.05,

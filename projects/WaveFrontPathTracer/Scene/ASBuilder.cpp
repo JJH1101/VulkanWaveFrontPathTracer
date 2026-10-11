@@ -1,7 +1,9 @@
 #include "ASBuilder.h"
+#include "KdTreeBuilder.h"
 #include "../Utils/BufferUtils.h"
 
 #include <cstddef>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <utility>
@@ -61,19 +63,22 @@ void scene::ASBuilder::init(vks::VulkanDevice& device, VkQueue queue)
     transformBuffer.deviceAddress = vks::util::getBufferDeviceAddress(device.logicalDevice, transformBuffer.buffer);
 }
 
-void scene::ASBuilder::build(vkglTF::Model& model, BuildFlags flags)
+void scene::ASBuilder::build(vkglTF::Model& model, BuildFlags flags, float parameter)
 {
     if (!device) throw std::logic_error("Call ASBuilder::init before build");
-    if (flags != BuildFlags::Default && flags != BuildFlags::Partitioned)
+    if (flags != BuildFlags::Default && flags != BuildFlags::UniformGrid &&
+        flags != BuildFlags::KdTreeLeaves && flags != BuildFlags::AdaptiveGrid)
         throw std::invalid_argument("Unknown ASBuilder build flag");
+    if (flags != BuildFlags::Default && (!std::isfinite(parameter) || parameter <= 0.0f))
+        throw std::invalid_argument("AS partition parameter must be positive and finite");
     if (model.device != device) throw std::invalid_argument("Model and ASBuilder must use the same device");
 
     // Old handles may still be referenced by rendering commands. Getters change after rebuilding.
     VK_CHECK_RESULT(vkDeviceWaitIdle(device->logicalDevice));
     clear();
     try {
-        if (flags == BuildFlags::Partitioned)
-            CreatePartitionedBottomLevelAccelerationStructure(model);
+        if (flags != BuildFlags::Default)
+            CreatePartitionedBottomLevelAccelerationStructure(model, flags, parameter);
         else
             CreateBottomLevelAccelerationStructure(model);
         CreateTopLevelAccelerationStructure();
@@ -83,15 +88,20 @@ void scene::ASBuilder::build(vkglTF::Model& model, BuildFlags flags)
     }
 }
 
-void scene::ASBuilder::CreatePartitionedBottomLevelAccelerationStructure(vkglTF::Model& model)
+void scene::ASBuilder::CreatePartitionedBottomLevelAccelerationStructure(vkglTF::Model& model,
+    BuildFlags flags, float parameter)
 {
     if (model.vertexBuffer.empty() || model.indexBuffer.empty())
         throw std::invalid_argument("Partitioned mode requires Model loaded with KeepCpuGeometry");
     if ((vkglTF::memoryPropertyFlags & buildInputUsage) != buildInputUsage)
         throw std::invalid_argument("Partitioned geometry buffers require device-address and AS-build usage flags");
 
-    // Consume the owning return value directly; ScenePartitioner must return a valid owning result.
-    partitionedScene.reset(new PartitionedScene(ScenePartitioner{}.partition(model, *device, queue)));
+    ScenePartitioner partitioner;
+    const auto cellBounds = flags == BuildFlags::UniformGrid
+        ? partitioner.createUniformGrid(model, parameter)
+        : KdTreeBuilder{}.build(model, parameter, flags == BuildFlags::KdTreeLeaves
+            ? KdTreeBuilder::Mode::Leaves : KdTreeBuilder::Mode::AdaptiveGrid);
+    partitionedScene = std::make_unique<PartitionedScene>(partitioner.partition(model, *device, queue, cellBounds));
     CreateBottomLevelAccelerationStructure(model, partitionedScene.get());
 }
 
