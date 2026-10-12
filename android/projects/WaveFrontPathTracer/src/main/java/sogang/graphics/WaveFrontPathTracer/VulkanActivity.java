@@ -26,7 +26,8 @@ public class VulkanActivity extends NativeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        // Create the shared models/envs/results root before starting native code.
+        getExternalFilesDir(null);
 
         String envName = "default.json";
 
@@ -36,6 +37,7 @@ public class VulkanActivity extends NativeActivity {
         }
 
         setEnvironmentName(envName);
+        super.onCreate(savedInstanceState);
     }
 
     // Use a semaphore to create a modal dialog

@@ -16,11 +16,15 @@ if (vks::tools::resourcePath != "") {
 	return vks::tools::resourcePath + "/assets/";
 }
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
-#if USE_ANDROID_TMP_PATH
-	return std::string(ANDROID_TMP_PATH) + PROJECT_NAME + "/";
+#if USE_ANDROID_EXTERNAL_FILES
+	if (!androidApp || !androidApp->activity || !androidApp->activity->externalDataPath) {
+		vks::tools::exitFatal("Android external files directory is unavailable", -1);
+		return "";
+	}
+	return std::string(androidApp->activity->externalDataPath) + "/";
 #else
 	return "";
-#endif // USE_ANDROID_TMP_PATH
+#endif // USE_ANDROID_EXTERNAL_FILES
 
 #elif defined(VK_EXAMPLE_ASSETS_DIR)
 	return VK_EXAMPLE_ASSETS_DIR;
@@ -49,11 +53,11 @@ const std::string getEnvPath()
 		return vks::tools::resourcePath + "/envs/";
 	}
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
-#if USE_ANDROID_TMP_PATH
-	return std::string(ANDROID_TMP_PATH) + PROJECT_NAME + "/envs/";
+#if USE_ANDROID_EXTERNAL_FILES
+	return getAssetPath() + "envs/";
 #else
 	return "envs/";
-#endif	// USE_ANDROID_TMP_PATH
+#endif	// USE_ANDROID_EXTERNAL_FILES
 
 #elif defined(VK_EXAMPLE_ENVIRONMENTS_DIR)
 	return VK_EXAMPLE_ENVIRONMENTS_DIR;

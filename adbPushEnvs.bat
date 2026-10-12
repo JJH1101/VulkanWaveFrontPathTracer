@@ -1,3 +1,4 @@
-adb shell rm -rf /data/local/tmp/WaveFrontPathTracer/envs
-
-adb push envs/. /data/local/tmp/WaveFrontPathTracer/envs/
+@echo off
+adb shell mkdir -p /sdcard/Android/data/sogang.graphics.WaveFrontPathTracer/files/envs
+if errorlevel 1 exit /b 1
+adb push envs/. /sdcard/Android/data/sogang.graphics.WaveFrontPathTracer/files/envs/

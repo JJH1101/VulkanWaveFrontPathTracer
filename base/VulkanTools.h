@@ -60,8 +60,8 @@
 }
 #endif
 
-#define USE_ANDROID_TMP_PATH 1
-#define ANDROID_TMP_PATH "/data/local/tmp/"
+// Read models/envs from the app's external files directory instead of APK assets.
+#define USE_ANDROID_EXTERNAL_FILES 1
 const std::string getAssetPath();
 const std::string getShaderBasePath();
 const std::string getEnvPath();

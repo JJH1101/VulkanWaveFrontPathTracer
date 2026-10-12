@@ -8,6 +8,9 @@
 #include "Benchmark.h"
 #include "../Environment/Environment.h"
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <format>
 
 template <typename... Args>
 inline void logInfo(std::string_view fmt, Args&&... args) {
@@ -35,6 +38,94 @@ std::string Benchmark::rayTypeToString(Renderer::RayType rayType) {
         return "SHADOW";
     else
         return "PRIMARY";
+}
+
+void Benchmark::saveResults(uint32_t benchmarkCyclesTotal) {
+    namespace fs = std::filesystem;
+
+    fs::path resultsDirectory = "results";
+#if defined(__ANDROID__)
+#if USE_ANDROID_EXTERNAL_FILES
+    // Keep results beside the envs/ and models/ directories used by adb push.
+    resultsDirectory = (fs::path(getEnvPath()) / ".." / "results").lexically_normal();
+#else
+    // APK assets are read-only; use the application's writable data directory.
+    const char* dataPath = androidApp->activity->externalDataPath;
+    if (!dataPath) dataPath = androidApp->activity->internalDataPath;
+    if (!dataPath) {
+        logInfo("ERROR: No writable Android data directory for benchmark results");
+        return;
+    }
+    resultsDirectory = fs::path(dataPath) / "results";
+#endif
+#endif
+
+    std::error_code error;
+    fs::create_directories(resultsDirectory, error);
+    if (error) {
+        logInfo("ERROR: Failed to create benchmark results directory '{}': {}", resultsDirectory.string(), error.message());
+        return;
+    }
+
+    std::string sceneFile;
+    Environment::getInstance()->getStringValue("Scene.filename", sceneFile);
+    std::string sceneName = fs::path(sceneFile).stem().string();
+    if (sceneName.empty()) sceneName = "Scene";
+    std::string fileName = sceneName;
+    for (char& character : fileName) {
+        if (std::string_view("<>:\"/\\|?*\t\r\n").find(character) != std::string_view::npos)
+            character = '_';
+    }
+    // Tabs and newlines cannot appear inside an unquoted TSV cell.
+    for (char& character : sceneName) {
+        if (character == '\t' || character == '\r' || character == '\n') character = ' ';
+    }
+    const auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    const fs::path resultsPath = resultsDirectory / std::format("{}_{}.tsv", fileName, timestamp);
+    std::ofstream results(resultsPath);
+    if (!results.is_open()) {
+        logInfo("ERROR: Failed to open benchmark results file '{}'", resultsPath.string());
+        return;
+    }
+
+    results << "Scene\tRay Type\tBounce\tRay Counts\tTrace Time (ms)\tTrace Perf (Mrays/s)\n";
+    auto writeRow = [&](std::string_view scene, std::string_view rayType, std::string_view bounce,
+                        uint64_t rayCount, float time, float performance) {
+        results << std::format("{}\t{}\t{}\t{}\t{:.4f}\t{:.2f}\n", scene, rayType, bounce,
+            rayCount / benchmarkCyclesTotal, time / benchmarkCyclesTotal, performance);
+    };
+
+    writeRow(sceneName, "Primary", "Total", numberOfPrimaryRays, traceTimePrimary, rtPerformancePrimary / benchmarkCyclesTotal);
+    writeRow("", "Path", "Total", numberOfPathRays, traceTimePath, rtPerformancePath / benchmarkCyclesTotal);
+    writeRow("", "Shadow", "Total", numberOfShadowRays, traceTimeShadow, rtPerformanceShadow / benchmarkCyclesTotal);
+    writeRow("", "Total", "Total", numberOfRays, traceTime, rtPerformance / benchmarkCyclesTotal);
+
+    if (renderer->getPrintBounceLogs()) {
+        auto writeBounces = [&](std::string_view rayType, const BounceLog bounceLogs[], int steps, int firstBounce) {
+            for (int i = 0; i < steps; ++i) {
+                const BounceLog& bounce = bounceLogs[i];
+                const float performance = bounce.traceTime > 0.0f
+                    ? static_cast<float>(bounce.rayCount) * 1.0e-3f / bounce.traceTime : 0.0f;
+                writeRow("", i == 0 ? rayType : std::string_view{}, std::to_string(i + firstBounce),
+                    bounce.rayCount, bounce.traceTime, performance);
+            }
+        };
+        if (renderer->getRayType() == Renderer::PATH_RAYS) {
+            writeBounces("Path", pathBounceLogs, renderer->getRecursionDepth(), 1);
+            writeBounces("Shadow", shadowBounceLogs, renderer->getRecursionDepth() + 1, 0);
+        }
+        else if (renderer->getRayType() == Renderer::SHADOW_RAYS) {
+            writeBounces("Shadow", shadowBounceLogs, 1, 0);
+        }
+    }
+
+    results.close();
+    if (!results) {
+        logInfo("ERROR: Failed to write benchmark results file '{}'", resultsPath.string());
+        return;
+    }
+    logInfo("Benchmark results saved to '{}'", resultsPath.string());
 }
 
 void Benchmark::reset() {
@@ -225,6 +316,7 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
                 printAndSum("PATH", pathBounceLogs, recursionDepth, renderer->getSortPathRays(), renderer->getReorderPathRays());
             }
 
+            saveResults(benchmarkCyclesTotal);
             finished = true;
         }
         else {

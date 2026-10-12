@@ -49,6 +49,7 @@ private:
 
     void reset(void);
     std::string rayTypeToString(Renderer::RayType rayType);
+    void saveResults(uint32_t benchmarkCyclesTotal);
 
 public:
 
