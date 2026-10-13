@@ -1,0 +1,70 @@
+{
+  "Application": {
+    "mode": "benchmark"
+  },
+  "Benchmark": {
+    "warmupCyclesPerView": 5,
+    "benchmarkCyclesPerView": 50,
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions" : [
+        "5.990560 1.090618 -4.012619",
+        "8.580224 1.586472 -3.083039",
+        "9.109529 1.419320 -0.270800",
+        "1.250604 2.462537 0.563109",
+        "-4.907917 1.736210 -1.345707",
+        "-6.031269 3.463501 -0.689302",
+        "-4.644501 5.016788 3.069884",
+        "6.242615 4.487066 -0.333043",
+        "6.348556 5.515262 -0.394274",
+        "-0.772704 14.430785 -0.977525"
+      ],
+      "cameraRotations" : [
+        "0.078477 132.325609 0.000956",
+        "-1.271305 178.528648 0.000962",
+        "-6.070620 89.732655 0.001098",
+        "-17.619505 72.485644 0.001680",
+        "-4.869552 131.437637 0.001852",
+        "-2.469034 -125.205334 0.001488",
+        "-0.666977 -52.150947 0.000772",
+        "-13.415171 93.655881 0.000800",
+        "-0.364523 92.760373 0.000875",
+        "-80.614295 -179.491698 0.006547"
+      ],
+      "lightPositions": [
+        "0.0 10.0 0.0"
+      ]
+    }
+  },
+  "Resolution": {
+    "width": 1560,
+    "height": 720
+  },
+  "Scene": {
+    "filename": "models/sponza_etc1s/sponza.gltf",
+    "ASMode": "default",
+    "ASParameter": 0.1,
+    "light": "0.0 10.0 0.0",
+    "lightScale": 0.025,
+    "headlight": false
+  },
+  "Renderer": {
+    "samplesPerPixel": 1,
+    "rayType": "path",
+    "recursionDepth": 3,
+    "keyValue": 0.6,
+    "whitePoint": 2.0,
+    "russianRoulette": false,
+    "sortShadowRays": false,
+    "reorderShadowRays": false,
+    "sortPathRays": false,
+    "reorderPathRays": false
+  },
+  "Camera": {
+    "position": "-9.532621 5.238951 0.979480",
+    "rotation": "-11.349973 279.949829 0.000000",
+    "nearPlane": 0.1,
+    "farPlane": 512.0,
+    "fieldOfView": 60.0
+  }
+}

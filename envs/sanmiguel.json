@@ -1,0 +1,70 @@
+{
+  "Application": {
+    "mode": "benchmark"
+  },
+  "Benchmark": {
+    "warmupCyclesPerView": 5,
+    "benchmarkCyclesPerView": 50,
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions": [
+        "6.021965 2.214825 1.422221",
+        "14.536154 1.602770 3.117913",
+        "17.675379 1.049044 2.357170",
+        "20.016180 1.072870 7.372356",
+        "12.333386 1.987437 11.999640",
+        "8.312531 1.097781 11.240918",
+        "6.625294 1.015436 5.317689",
+        "8.438878 0.953827 4.085665",
+        "10.395247 7.112755 1.037794",
+        "22.004461 5.369446 4.334311"
+      ],
+      "cameraRotations": [
+        "-2.999753 -87.651464 0.000080",
+        "-6.899613 -125.902138 -0.000325",
+        "-18.598172 -135.053489 -0.000745",
+        "-4.796953 88.894628 -0.000357",
+        "-5.989087 -25.864304 0.000085",
+        "5.264544 -31.419545 0.000215",
+        "17.119007 -63.378344 -0.000004",
+        "1.819362 -45.679247 0.000030",
+        "-2.226945 -78.389138 -0.001336",
+        "8.729473 43.834054 -0.001125"
+      ],
+      "lightPositions": [
+        "15.0 15.0 5.0"
+      ]
+    }
+  },
+  "Resolution": {
+    "width": 1560,
+    "height": 720
+  },
+  "Scene": {
+    "filename": "models/sanMiguel_etc1s/sanMiguel.gltf",
+    "ASMode": "default",
+    "ASParameter": 0.1,
+    "light": "15.0 20.0 8.0",
+    "lightScale": 0.025,
+    "headlight": false
+  },
+  "Renderer": {
+    "samplesPerPixel": 1,
+    "rayType": "path",
+    "recursionDepth": 3,
+    "keyValue": 0.6,
+    "whitePoint": 2.0,
+    "russianRoulette": false,
+    "sortShadowRays": false,
+    "reorderShadowRays": false,
+    "sortPathRays": false,
+    "reorderPathRays": false
+  },
+  "Camera": {
+    "position": "6.021965 2.214825 1.422221",
+    "rotation": "-2.999753 -87.651464 0.000080",
+    "nearPlane": 0.1,
+    "farPlane": 512.0,
+    "fieldOfView": 60.0
+  }
+}

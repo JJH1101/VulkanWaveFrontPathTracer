@@ -1,0 +1,70 @@
+{
+  "Application": {
+    "mode": "benchmark"
+  },
+  "Benchmark": {
+    "warmupCyclesPerView": 5,
+    "benchmarkCyclesPerView": 50,
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions": [
+        "-0.705231 2.176404 -0.842897",
+        "4.192624 2.499268 1.896601",
+        "8.280256 1.553084 3.635256",
+        "8.829658 2.117307 4.073679",
+        "9.562010 1.453631 2.226907",
+        "8.682075 2.329481 0.824900",
+        "9.010070 1.869123 -1.145580",
+        "8.512733 2.204569 -3.397136",
+        "10.542804 2.679696 -1.825445",
+        "5.825197 2.754680 0.624650"
+      ],
+      "cameraRotations": [
+        "-2.934129 -78.284843 -0.001068",
+        "-11.483900 -90.735250 -0.001494",
+        "-7.732582 31.064290 -0.001693",
+        "-4.580887 3.913597 -0.001853",
+        "-10.579904 26.714094 -0.001692",
+        "-1.578336 -29.236368 -0.001862",
+        "-2.778264 -28.786352 -0.001867",
+        "0.823029 -100.037715 -0.002328",
+        "-19.726100 84.462426 -0.001994",
+        "-5.624547 -5.239578 -0.001463"
+      ],
+      "lightPositions": [
+        "5.0 3.0 -0.5"
+      ]
+    }
+  },
+  "Resolution": {
+    "width": 1560,
+    "height": 720
+  },
+  "Scene": {
+    "filename": "models/bistrointerior_etc1s/BistroInterior.gltf",
+    "ASMode": "default",
+    "ASParameter": 0.1,
+    "light": "5.0 3.0 -0.5",
+    "lightScale": 0.025,
+    "headlight": false
+  },
+  "Renderer": {
+    "samplesPerPixel": 1,
+    "rayType": "path",
+    "recursionDepth": 3,
+    "keyValue": 0.6,
+    "whitePoint": 2.0,
+    "russianRoulette": false,
+    "sortShadowRays": false,
+    "reorderShadowRays": false,
+    "sortPathRays": false,
+    "reorderPathRays": false
+  },
+  "Camera": {
+    "position": "-0.705231 2.176404 -0.842897",
+    "rotation": "-2.934129 -78.284843 -0.001068",
+    "nearPlane": 0.1,
+    "farPlane": 512.0,
+    "fieldOfView": 60.0
+  }
+}

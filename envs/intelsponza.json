@@ -1,0 +1,72 @@
+{
+  "Application": {
+    "mode": "benchmark"
+  },
+  "Benchmark": {
+    "warmupCyclesPerView": 5,
+    "benchmarkCyclesPerView": 50,
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions": [
+        "11.231571 0.606455 -0.078149",
+        "8.778500 1.924391 4.778447",
+        "-8.415627 1.261149 3.448753",
+        "-9.356429 2.223451 0.105543",
+        "-9.284831 2.471908 -1.614641",
+        "-7.773460 9.704279 -1.397049",
+        "-3.787533 7.809183 -3.997229",
+        "4.717039 8.129015 -4.141634",
+        "7.736501 13.197209 0.268173",
+        "4.453540 21.125586 -0.346831",
+        "-4.641300 17.274113 -2.223482"
+      ],
+      "cameraRotations": [
+        "26.238984 87.892330 -0.000225",
+        "-5.861044 86.692431 -0.000132",
+        "3.891492 135.294343 0.001379",
+        "-7.357539 90.594885 0.002061",
+        "1.493927 -115.506059 0.000736",
+        "-18.600039 -92.411057 -0.005164",
+        "-5.248285 -71.563548 -0.006323",
+        "-13.347218 -136.663825 -0.008391",
+        "-40.042273 92.544860 -0.007865",
+        "-40.939874 93.146526 -0.005343",
+        "-50.986723 161.248616 -0.002120"
+      ],
+      "lightPositions": [
+        "7.0 14.5 0.0"
+      ]
+    }
+  },
+  "Resolution": {
+    "width": 1560,
+    "height": 720
+  },
+  "Scene": {
+    "filename": "models/intelSponza_etc1s/intelSponza.gltf ",
+    "ASMode": "default",
+    "ASParameter": 0.1,
+    "light": "7.0 14.5 0.0",
+    "lightScale": 0.025,
+    "headlight": false
+  },
+  "Renderer": {
+    "samplesPerPixel": 1,
+    "rayType": "path",
+    "recursionDepth": 3,
+    "keyValue": 0.6,
+    "whitePoint": 2.0,
+    "russianRoulette": false,
+    "sortShadowRays": false,
+    "reorderShadowRays": false,
+    "sortPathRays": false,
+    "reorderPathRays": false
+  },
+  "Camera": {
+    "position": "11.231571 0.606455 -0.078149",
+    "rotation": "26.238984 87.892330 -0.000225",
+    "nearPlane": 0.1,
+    "farPlane": 512.0,
+    "fieldOfView": 60.0
+  }
+}

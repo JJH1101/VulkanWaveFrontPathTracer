@@ -456,9 +456,9 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 		.magFilter = VK_FILTER_LINEAR,
 		.minFilter = VK_FILTER_LINEAR,
 		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 		.anisotropyEnable = VK_TRUE,
 		.maxAnisotropy = 8.0f,
 		.compareOp = VK_COMPARE_OP_NEVER,
@@ -904,7 +904,7 @@ void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, u
 					const tinygltf::Accessor& colorAccessor = model.accessors[primitive.attributes.find("COLOR_0")->second];
 					const tinygltf::BufferView& colorView = model.bufferViews[colorAccessor.bufferView];
 					// Color buffer are either of type vec3 or vec4
-					numColorComponents = colorAccessor.type == TINYGLTF_PARAMETER_TYPE_FLOAT_VEC3 ? 3 : 4;
+					numColorComponents = colorAccessor.type == TINYGLTF_TYPE_VEC3 ? 3 : 4;
 					bufferColors = reinterpret_cast<const float*>(&(model.buffers[colorView.buffer].data[colorAccessor.byteOffset + colorView.byteOffset]));
 				}
 

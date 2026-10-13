@@ -7,17 +7,17 @@
     "height": 720
   },
   "Scene": {
-    "ASMode": "kd_tree_leaves",
-    "ASParameter": 2048.0,
-    "filename": "models/Sponza/Sponza.gltf",
+    "filename": "models/sponza_etc1s/sponza.gltf",
+    "ASMode": "default",
+    "ASParameter": 0.1,
     "light": "0.0 10.0 0.0",
     "lightScale": 0.05,
     "headlight": false
   },
   "Renderer": {
     "samplesPerPixel": 1,
-    "rayType": "cells",
-    "recursionDepth": 4,
+    "rayType": "path",
+    "recursionDepth": 3,
     "keyValue": 0.6,
     "whitePoint": 2.0,
     "russianRoulette": false,

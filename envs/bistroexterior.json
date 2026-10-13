@@ -1,0 +1,70 @@
+{
+  "Application": {
+    "mode": "benchmark"
+  },
+  "Benchmark": {
+    "warmupCyclesPerView": 5,
+    "benchmarkCyclesPerView": 50,
+    "printBounceLogs": true,
+    "views": {
+      "cameraPositions": [
+        "62.188602 7.813568 36.360546",
+        "17.558819 5.757510 19.520470",
+        "-4.619010 5.053561 15.534005",
+        "-14.744481 5.502219 2.792851",
+        "23.957928 5.747561 -56.545040",
+        "1.914701 5.910877 -24.453737",
+        "19.022570 28.694044 -55.843113",
+        "-8.211014 18.170671 -2.940100",
+        "-13.810672 22.703985 3.875963",
+        "-14.485033 19.963840 3.643128"
+      ],
+      "cameraRotations": [
+        "-2.468105 69.327089 0.001035",
+        "-2.468084 69.327119 0.001043",
+        "0.832475 30.927379 0.001101",
+        "-6.065484 -64.923712 0.000551",
+        "0.240680 148.521682 -0.000593",
+        "0.240680 148.521682 -0.000594",
+        "-37.406524 170.706249 -0.001095",
+        "-12.956120 77.254556 -0.000847",
+        "-39.504568 -1.197568 -0.001351",
+        "-24.204282 -108.898521 -0.001569"
+      ],
+      "lightPositions": [
+        "25.0 100.0 5.0"
+      ]
+    }
+  },
+  "Resolution": {
+    "width": 1560,
+    "height": 720
+  },
+  "Scene": {
+    "filename": "models/bistroexterior_etc1s/bistroexterior.gltf",
+    "ASMode": "default",
+    "ASParameter": 0.1,
+    "light": "25.0 100.0 5.0",
+    "lightScale": 0.025,
+    "headlight": false
+  },
+  "Renderer": {
+    "samplesPerPixel": 1,
+    "rayType": "path",
+    "recursionDepth": 3,
+    "keyValue": 0.6,
+    "whitePoint": 2.0,
+    "russianRoulette": false,
+    "sortShadowRays": true,
+    "reorderShadowRays": true,
+    "sortPathRays": true,
+    "reorderPathRays": true
+  },
+  "Camera": {
+    "position": "-21.893288 6.842527 -2.459376",
+    "rotation": "-4.600013 -98.299873 0.000000",
+    "nearPlane": 0.1,
+    "farPlane": 512.0,
+    "fieldOfView": 60.0
+  }
+}

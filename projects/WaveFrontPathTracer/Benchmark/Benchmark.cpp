@@ -184,7 +184,9 @@ void Benchmark::reset() {
    Environment::getInstance()->getVectorValues("Benchmark.views.cameraRotations", views.cameraRotations);
    Environment::getInstance()->getVectorValues("Benchmark.views.lightPositions", views.lightPositions);
 
-   views.numberOfViews = std::min({ views.cameraPositions.size(), views.cameraRotations.size(), views.lightPositions.size() });
+   views.numberOfViews = views.lightPositions.size() == 1
+       ? std::min(views.cameraPositions.size(), views.cameraRotations.size())
+       : std::min({ views.cameraPositions.size(), views.cameraRotations.size(), views.lightPositions.size() });
 }
 
 float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks::Buffer& framePixels) {
@@ -193,7 +195,7 @@ float Benchmark::run(Camera& camera, glm::ivec2 extent, vks::Buffer& pixels, vks
     if(frameCount == 0) {
         camera.setPosition(views.cameraPositions[view]);
         camera.setRotation(views.cameraRotations[view]);
-        renderer->setLightPosition(views.lightPositions[view]);
+        renderer->setLightPosition(views.lightPositions[views.lightPositions.size() == 1 ? 0 : view]);
 	}
 
     float renderKernelsTimeCur;
