@@ -13,6 +13,13 @@ namespace scene
 	using Polygon = std::vector<vkglTF::Vertex>;
     using PartitionedCell = std::vector<vkglTF::Primitive>;
 
+    struct ClippedPolygonTriangulation {
+        // A triangle clipped by six AABB planes has at most nine boundary vertices.
+        static constexpr uint32_t maxVertices = 9;
+        std::array<std::array<uint32_t, 3>, maxVertices - 2> triangles{};
+        uint32_t count = 0;
+    };
+
 	struct Aabb
 	{
 		glm::vec3 min{};
@@ -75,6 +82,9 @@ namespace scene
             VkQueue transferQueue, const std::vector<Aabb>& cellBounds) const;
 
         Polygon clipTriangleAgainstAabb(const Triangle& triangle, const Aabb& bounds) const;
+        // Triangle passthrough, best quad diagonal, or Delaunay flips for 5-9 vertices.
+        // Returned indices reference polygon; boundary coordinates and attributes are unchanged.
+        ClippedPolygonTriangulation triangulateClippedPolygon(const Polygon& polygon) const;
 
 	private:
 		enum class Axis : uint32_t

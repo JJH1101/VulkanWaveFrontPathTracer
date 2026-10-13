@@ -1,6 +1,7 @@
 #include "ScenePartitioner.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -90,26 +91,17 @@ scene::PartitionedScene scene::ScenePartitioner::partition(vkglTF::Model& scene,
 							Polygon clippedPolygon = clipTriangleAgainstAabb(triangle, cellBound);
 							if (clippedPolygon.size() < 3) continue;
 
-							for (uint32_t j = 1; j < clippedPolygon.size() - 1; ++j) {
-								if (uniqueVertices.count(clippedPolygon[0]) == 0) {
-									uniqueVertices[clippedPolygon[0]] = static_cast<uint32_t>(partitionedVertices.size());
-									partitionedVertices.push_back(clippedPolygon[0]);
+							const auto triangulation = triangulateClippedPolygon(clippedPolygon);
+							for (uint32_t j = 0; j < triangulation.count; ++j) {
+								for (uint32_t corner : triangulation.triangles[j]) {
+									const auto& vertex = clippedPolygon[corner];
+									auto [entry, inserted] = uniqueVertices.try_emplace(vertex,
+										static_cast<uint32_t>(partitionedVertices.size()));
+									if (inserted) partitionedVertices.push_back(vertex);
+									partitionedIndices.push_back(entry->second);
 								}
-								partitionedIndices.push_back(uniqueVertices[clippedPolygon[0]]);
-
-								if (uniqueVertices.count(clippedPolygon[j]) == 0) {
-									uniqueVertices[clippedPolygon[j]] = static_cast<uint32_t>(partitionedVertices.size());
-									partitionedVertices.push_back(clippedPolygon[j]);
-								}
-								partitionedIndices.push_back(uniqueVertices[clippedPolygon[j]]);
-
-								if (uniqueVertices.count(clippedPolygon[j + 1]) == 0) {
-									uniqueVertices[clippedPolygon[j + 1]] = static_cast<uint32_t>(partitionedVertices.size());
-									partitionedVertices.push_back(clippedPolygon[j + 1]);
-								}
-								partitionedIndices.push_back(uniqueVertices[clippedPolygon[j + 1]]);
 							}
-							indexCount += (clippedPolygon.size() - 2) * 3;
+							indexCount += triangulation.count * 3;
 						}
 
 						if (indexCount > 0) {
@@ -190,6 +182,164 @@ scene::PartitionedScene scene::ScenePartitioner::partition(vkglTF::Model& scene,
 	vkFreeMemory(device.logicalDevice, indexStaging.memory, nullptr);
 
 	return partitionedScene;
+}
+
+scene::ClippedPolygonTriangulation scene::ScenePartitioner::triangulateClippedPolygon(
+    const Polygon& polygon) const
+{
+    ClippedPolygonTriangulation result;
+    constexpr uint32_t capacity = ClippedPolygonTriangulation::maxVertices;
+    std::array<uint32_t, capacity> boundary{};
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < polygon.size(); ++i) {
+        // Remove only exact duplicate boundary points; never collapse a thin valid region.
+        if (count && polygon[boundary[count - 1]].pos == polygon[i].pos) continue;
+        if (i + 1 == polygon.size() && count && polygon[boundary[0]].pos == polygon[i].pos) continue;
+        if (count == capacity) throw std::invalid_argument("Clipped polygon exceeds nine distinct vertices");
+        boundary[count++] = i;
+    }
+    if (count < 3) return result;
+
+    if (count == 3) {
+        const glm::dvec3 a = glm::dvec3(polygon[boundary[1]].pos) - glm::dvec3(polygon[boundary[0]].pos);
+        const glm::dvec3 b = glm::dvec3(polygon[boundary[2]].pos) - glm::dvec3(polygon[boundary[0]].pos);
+        const glm::dvec3 cross = glm::cross(a, b);
+        if (glm::dot(cross, cross) > 0.0)
+            result.triangles[result.count++] = {boundary[0], boundary[1], boundary[2]};
+        return result;
+    }
+
+    std::array<glm::dvec3, capacity> points{};
+    const glm::dvec3 origin(polygon[boundary[0]].pos);
+    for (uint32_t i = 0; i < count; ++i)
+        points[i] = glm::dvec3(polygon[boundary[i]].pos) - origin;
+    glm::dvec3 normal(0.0);
+    for (uint32_t i = 1; i + 1 < count; ++i)
+        normal += glm::cross(points[i], points[i + 1]);
+    if (glm::dot(normal, normal) == 0.0) return result;
+
+    auto quality = [&](uint32_t i, uint32_t k, uint32_t j) {
+        const glm::dvec3 a = points[k] - points[i], b = points[j] - points[i];
+        const glm::dvec3 cross = glm::cross(a, b);
+        const double orientation = glm::dot(cross, normal);
+        if (orientation < 0.0) return -1.0; // Preserve the input winding.
+        const double areaSquared = glm::dot(cross, cross);
+        if (areaSquared == 0.0) return 0.0;
+        const double ab = glm::dot(a, a), ac = glm::dot(b, b);
+        const glm::dvec3 c = points[j] - points[k];
+        const double bc = glm::dot(c, c);
+        const double longest = std::max({ab, ac, bc});
+        const double secondLongest = std::max({std::min(ab, ac), std::min(ab, bc), std::min(ac, bc)});
+        // sin^2(smallest angle), monotonic because that angle is at most 60 degrees.
+        // Double precision and a ratio avoid acos and any scene-scale area threshold.
+        return areaSquared / (longest * secondLongest);
+    };
+
+    if (count == 4) {
+        const double q012 = quality(0, 1, 2), q023 = quality(0, 2, 3);
+        const double q013 = quality(0, 1, 3), q123 = quality(1, 2, 3);
+        if (std::min(q013, q123) > std::min(q012, q023)) {
+            if (q013 > 0.0) result.triangles[result.count++] = {boundary[0], boundary[1], boundary[3]};
+            if (q123 > 0.0) result.triangles[result.count++] = {boundary[1], boundary[2], boundary[3]};
+        }
+        else {
+            if (q012 > 0.0) result.triangles[result.count++] = {boundary[0], boundary[1], boundary[2]};
+            if (q023 > 0.0) result.triangles[result.count++] = {boundary[0], boundary[2], boundary[3]};
+        }
+        return result;
+    }
+
+    // Project onto an orthonormal basis of the polygon plane. Dropping an axis
+    // would distort distances and the Delaunay criterion for oblique triangles.
+    const glm::dvec3 unitNormal = glm::normalize(normal);
+    uint32_t farthest = 1;
+    for (uint32_t i = 2; i < count; ++i) {
+        if (glm::dot(points[i], points[i]) > glm::dot(points[farthest], points[farthest])) farthest = i;
+    }
+    const glm::dvec3 axisU = glm::normalize(points[farthest] - unitNormal * glm::dot(points[farthest], unitNormal));
+    const glm::dvec3 axisV = glm::cross(unitNormal, axisU);
+    std::array<std::array<double, 2>, capacity> projected{};
+    for (uint32_t i = 0; i < count; ++i)
+        projected[i] = {glm::dot(points[i], axisU), glm::dot(points[i], axisV)};
+
+    auto orientation = [&](uint32_t a, uint32_t b, uint32_t c) {
+        const double ax = projected[a][0] - projected[c][0], ay = projected[a][1] - projected[c][1];
+        const double bx = projected[b][0] - projected[c][0], by = projected[b][1] - projected[c][1];
+        return ax * by - ay * bx;
+    };
+    auto insideCircle = [&](uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
+        const double ax = projected[a][0] - projected[d][0], ay = projected[a][1] - projected[d][1];
+        const double bx = projected[b][0] - projected[d][0], by = projected[b][1] - projected[d][1];
+        const double cx = projected[c][0] - projected[d][0], cy = projected[c][1] - projected[d][1];
+        const double a2 = ax * ax + ay * ay, b2 = bx * bx + by * by, c2 = cx * cx + cy * cy;
+        const double determinant = a2 * (bx * cy - cx * by) + b2 * (cx * ay - ax * cy) + c2 * (ax * by - bx * ay);
+        const double magnitude = a2 * (std::abs(bx * cy) + std::abs(cx * by))
+            + b2 * (std::abs(cx * ay) + std::abs(ax * cy))
+            + c2 * (std::abs(ax * by) + std::abs(bx * ay));
+        // Retain the existing diagonal for near-cocircular points. A scale-relative
+        // rounding bound avoids unstable flips without collapsing thin triangles.
+        return determinant > 32.0 * std::numeric_limits<double>::epsilon() * magnitude;
+    };
+
+    // Start with a fan. Each neighbor is an encoded triangle edge (3 * triangle + side),
+    // allowing constant-time adjacency updates and a small bit-mask work queue.
+    constexpr uint32_t maxTriangles = capacity - 2;
+    std::array<std::array<int32_t, 3>, maxTriangles> neighbors{};
+    std::array<bool, maxTriangles> positiveArea{};
+    uint32_t pending = 0;
+    result.count = count - 2;
+    for (uint32_t i = 0; i < result.count; ++i) {
+        result.triangles[i] = {0, i + 1, i + 2};
+        positiveArea[i] = orientation(0, i + 1, i + 2) > 0.0;
+        neighbors[i] = {i > 0 ? int32_t(3 * (i - 1) + 2) : -1, -1,
+            i + 1 < result.count ? int32_t(3 * (i + 1)) : -1};
+        if (i + 1 < result.count) pending |= 1u << (3 * i + 2);
+    }
+    while (pending) {
+        const uint32_t edge = std::countr_zero(pending);
+        pending &= pending - 1;
+        const uint32_t first = edge / 3, side = edge % 3;
+        const int32_t opposite = neighbors[first][side];
+        if (opposite < 0) continue; // Boundary edges are never flipped.
+        const uint32_t second = uint32_t(opposite) / 3, otherSide = uint32_t(opposite) % 3;
+        const uint32_t a = result.triangles[first][side];
+        const uint32_t b = result.triangles[first][(side + 1) % 3];
+        const uint32_t c = result.triangles[first][(side + 2) % 3];
+        const uint32_t d = result.triangles[second][(otherSide + 2) % 3];
+        // A collinear initial fan triangle has no circumcircle; test its neighbor instead.
+        if (!positiveArea[first] && !positiveArea[second]) continue;
+        const bool flip = positiveArea[first] ? insideCircle(a, b, c, d) : insideCircle(b, a, d, c);
+        if (!flip) continue;
+        // Most edges are already legal. Test convexity only for proposed flips.
+        if (orientation(c, d, b) <= 0.0 || orientation(d, c, a) <= 0.0) continue;
+
+        const int32_t bc = neighbors[first][(side + 1) % 3];
+        const int32_t ca = neighbors[first][(side + 2) % 3];
+        const int32_t ad = neighbors[second][(otherSide + 1) % 3];
+        const int32_t db = neighbors[second][(otherSide + 2) % 3];
+        result.triangles[first] = {c, d, b};
+        result.triangles[second] = {d, c, a};
+        positiveArea[first] = positiveArea[second] = true;
+        neighbors[first] = {int32_t(3 * second), db, bc};
+        neighbors[second] = {int32_t(3 * first), ca, ad};
+        for (uint32_t triangle : {first, second}) {
+            for (uint32_t s = 1; s < 3; ++s) {
+                const int32_t neighbor = neighbors[triangle][s];
+                if (neighbor >= 0) {
+                    neighbors[uint32_t(neighbor) / 3][uint32_t(neighbor) % 3] = int32_t(3 * triangle + s);
+                    pending |= 1u << (3 * triangle + s);
+                }
+            }
+        }
+    }
+    uint32_t triangleCount = 0;
+    for (uint32_t i = 0; i < result.count; ++i) {
+        const auto& triangle = result.triangles[i];
+        if (positiveArea[i])
+            result.triangles[triangleCount++] = {boundary[triangle[0]], boundary[triangle[1]], boundary[triangle[2]]};
+    }
+    result.count = triangleCount;
+    return result;
 }
 
 void scene::ScenePartitioner::clipPolygonAgainstPlane(
