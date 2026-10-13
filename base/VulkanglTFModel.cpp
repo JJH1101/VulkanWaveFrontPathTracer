@@ -18,6 +18,19 @@
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 
 #include "VulkanglTFModel.h"
+#include <memory>
+#include <stdexcept>
+
+namespace {
+	bool isKtxImage(const tinygltf::Image& image)
+	{
+		if (image.mimeType == "image/ktx" || image.mimeType == "image/ktx2") return true;
+		const auto dot = image.uri.find_last_of('.');
+		if (dot == std::string::npos) return false;
+		const auto extension = image.uri.substr(dot + 1);
+		return extension == "ktx" || extension == "ktx2";
+	}
+}
 
 VkDescriptorSetLayout vkglTF::descriptorSetLayoutImage = VK_NULL_HANDLE;
 VkDescriptorSetLayout vkglTF::descriptorSetLayoutUbo = VK_NULL_HANDLE;
@@ -29,11 +42,11 @@ uint32_t vkglTF::descriptorBindingFlags = vkglTF::DescriptorBindingFlags::ImageB
 */
 bool loadImageDataFunc(tinygltf::Image* image, const int imageIndex, std::string* error, std::string* warning, int req_width, int req_height, const unsigned char* bytes, int size, void* userData)
 {
-	// KTX files will be handled by our own code
-	if (image->uri.find_last_of(".") != std::string::npos) {
-		if (image->uri.substr(image->uri.find_last_of(".") + 1) == "ktx") {
-			return true;
-		}
+	// Preserve KTX bytes for libktx rather than passing compressed data to STB.
+	if (isKtxImage(*image)) {
+		if (!bytes || size <= 0) return false;
+		image->image.assign(bytes, bytes + size);
+		return true;
 	}
 
 	return tinygltf::LoadImageData(image, imageIndex, error, warning, req_width, req_height, bytes, size, userData);
@@ -72,13 +85,7 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 {
 	this->device = device;
 
-	bool isKtx = false;
-	// Image points to an external ktx file
-	if (gltfimage.uri.find_last_of(".") != std::string::npos) {
-		if (gltfimage.uri.substr(gltfimage.uri.find_last_of(".") + 1) == "ktx") {
-			isKtx = true;
-		}
-	}
+	const bool isKtx = isKtxImage(gltfimage);
 
 	VkFormat format;
 
@@ -99,6 +106,7 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 				for (int32_t j = 0; j < 3; ++j) {
 					rgba[j] = rgb[j];
 				}
+				rgba[3] = 255;
 				rgba += 4;
 				rgb += 3;
 			}
@@ -110,7 +118,7 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 		}
 		assert(buffer);
 
-		format = VK_FORMAT_R8G8B8A8_UNORM;
+		format = gltfimage.bits == 16 ? VK_FORMAT_R16G16B16A16_UNORM : VK_FORMAT_R8G8B8A8_UNORM;
 
 		width = gltfimage.width;
 		height = gltfimage.height;
@@ -220,8 +228,8 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 				.layerCount = 1,
 			};
 			imageBlit.srcOffsets[1] = {
-				.x = int32_t(width >> (i - 1)),
-				.y = int32_t(height >> (i - 1)),
+				.x = int32_t(std::max(1u, width >> (i - 1))),
+				.y = int32_t(std::max(1u, height >> (i - 1))),
 				.z = 1
 			};
 			imageBlit.dstSubresource = {
@@ -230,8 +238,8 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 				.layerCount = 1,
 			};
 			imageBlit.dstOffsets[1] = {
-				.x = int32_t(width >> i),
-				.y = int32_t(height >> i),
+				.x = int32_t(std::max(1u, width >> i)),
+				.y = int32_t(std::max(1u, height >> i)),
 				.z = 1
 			};
 
@@ -287,9 +295,13 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 		// Texture is stored in an external ktx file
 		std::string filename = path + "/" + gltfimage.uri;
 
-		ktxTexture* ktxTexture;
+		ktxTexture* ktxTexture = nullptr;
 
 		ktxResult result = KTX_SUCCESS;
+		if (!gltfimage.image.empty()) {
+			result = ktxTexture_CreateFromMemory(gltfimage.image.data(), gltfimage.image.size(),
+				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTexture);
+		} else {
 #if defined(__ANDROID__) && !USE_ANDROID_EXTERNAL_FILES
 		AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
 		if (!asset) {
@@ -308,7 +320,39 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 		}
 		result = ktxTexture_CreateFromNamedFile(filename.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTexture);
 #endif		
-		assert(result == KTX_SUCCESS);
+		}
+		if (result != KTX_SUCCESS)
+			throw std::runtime_error("Could not load KTX texture '" + filename + "': " + ktxErrorString(result));
+		const auto destroyTexture = [](::ktxTexture* texture) { ktxTexture_Destroy(texture); };
+		std::unique_ptr<::ktxTexture, decltype(destroyTexture)> textureOwner(ktxTexture, destroyTexture);
+		if (ktxTexture->numDimensions != 2 || ktxTexture->isArray || ktxTexture->isCubemap)
+			throw std::runtime_error("glTF textures must be 2D images: " + filename);
+
+		if (ktxTexture->classId == ktxTexture2_c && ktxTexture_NeedsTranscoding(ktxTexture)) {
+			// ETC1S/Basis data must be transcoded before a Vulkan image can sample it.
+			ktx_transcode_fmt_e target = KTX_TTF_RGBA32;
+			format = VK_FORMAT_R8G8B8A8_UNORM;
+			auto supportsFormat = [&](VkFormat candidate) {
+				VkFormatProperties properties{};
+				vkGetPhysicalDeviceFormatProperties(device->physicalDevice, candidate, &properties);
+				constexpr VkFormatFeatureFlags required = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
+					| VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+				return (properties.optimalTilingFeatures & required) == required;
+			};
+			if (device->enabledFeatures.textureCompressionBC && supportsFormat(VK_FORMAT_BC7_UNORM_BLOCK)) {
+				target = KTX_TTF_BC7_RGBA;
+				format = VK_FORMAT_BC7_UNORM_BLOCK;
+			} else if (device->enabledFeatures.textureCompressionETC2 && supportsFormat(VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK)) {
+				target = KTX_TTF_ETC2_RGBA;
+				format = VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
+			}
+			result = ktxTexture2_TranscodeBasis(reinterpret_cast<ktxTexture2*>(ktxTexture), target, 0);
+			if (result != KTX_SUCCESS)
+				throw std::runtime_error("Could not transcode KTX2 texture '" + filename + "': " + ktxErrorString(result));
+			// UNORM preserves the renderer's existing base-color gamma conversion.
+		} else {
+			format = ktxTexture_GetVkFormat(ktxTexture);
+		}
 
 		this->device = device;
 		width = ktxTexture->baseWidth;
@@ -316,8 +360,7 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 		mipLevels = ktxTexture->numLevels;
 
 		ktx_uint8_t* ktxTextureData = ktxTexture_GetData(ktxTexture);
-		ktx_size_t ktxTextureSize = ktxTexture_GetSize(ktxTexture);
-		format = ktxTexture_GetVkFormat(ktxTexture);
+		ktx_size_t ktxTextureSize = ktxTexture_GetDataSize(ktxTexture);
 
 		// Get device properties for the requested texture format
 		VkFormatProperties formatProperties;
@@ -405,7 +448,7 @@ void vkglTF::Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path
 		vkDestroyBuffer(device->logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(device->logicalDevice, stagingMemory, nullptr);
 
-		ktxTexture_Destroy(ktxTexture);
+		textureOwner.reset();
 	}
 
 	VkSamplerCreateInfo samplerInfo{
@@ -1018,14 +1061,28 @@ void vkglTF::Model::loadImages(tinygltf::Model &gltfModel, vks::VulkanDevice *de
 
 void vkglTF::Model::loadMaterials(tinygltf::Model &gltfModel)
 {
+	auto materialTexture = [&](int textureIndex) -> vkglTF::Texture* {
+		const auto& texture = gltfModel.textures.at(textureIndex);
+		int imageIndex = texture.source;
+		const auto basis = texture.extensions.find("KHR_texture_basisu");
+		if (basis != texture.extensions.end()) {
+			const auto& extension = basis->second;
+			if (!extension.Has("source") || !extension.Get("source").IsInt())
+				throw std::runtime_error("KHR_texture_basisu requires an integer image source");
+			imageIndex = static_cast<int>(extension.Get("source").GetNumberAsInt());
+		}
+		if (imageIndex < 0 || static_cast<size_t>(imageIndex) >= gltfModel.images.size())
+			throw std::runtime_error("glTF texture references an invalid image source");
+		return getTexture(static_cast<uint32_t>(imageIndex));
+	};
 	for (tinygltf::Material &mat : gltfModel.materials) {
 		vkglTF::Material material(device);
 		if (mat.values.find("baseColorTexture") != mat.values.end()) {
-			material.baseColorTexture = getTexture(gltfModel.textures[mat.values["baseColorTexture"].TextureIndex()].source);
+			material.baseColorTexture = materialTexture(mat.values["baseColorTexture"].TextureIndex());
 		}
 		// Metallic roughness workflow
 		if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
-			material.metallicRoughnessTexture = getTexture(gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source);
+			material.metallicRoughnessTexture = materialTexture(mat.values["metallicRoughnessTexture"].TextureIndex());
 		}
 		if (mat.values.find("roughnessFactor") != mat.values.end()) {
 			material.roughnessFactor = static_cast<float>(mat.values["roughnessFactor"].Factor());
@@ -1037,15 +1094,15 @@ void vkglTF::Model::loadMaterials(tinygltf::Model &gltfModel)
 			material.baseColorFactor = glm::make_vec4(mat.values["baseColorFactor"].ColorFactor().data());
 		}				
 		if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
-			material.normalTexture = getTexture(gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source);
+			material.normalTexture = materialTexture(mat.additionalValues["normalTexture"].TextureIndex());
 		} else {
 			material.normalTexture = &emptyTexture;
 		}
 		if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
-			material.emissiveTexture = getTexture(gltfModel.textures[mat.additionalValues["emissiveTexture"].TextureIndex()].source);
+			material.emissiveTexture = materialTexture(mat.additionalValues["emissiveTexture"].TextureIndex());
 		}
 		if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
-			material.occlusionTexture = getTexture(gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source);
+			material.occlusionTexture = materialTexture(mat.additionalValues["occlusionTexture"].TextureIndex());
 		}
 		if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
 			tinygltf::Parameter param = mat.additionalValues["alphaMode"];

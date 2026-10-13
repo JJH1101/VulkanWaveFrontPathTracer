@@ -162,6 +162,8 @@ private:
 		// Original Features using VkPhysicalDeviceFeature structure.
 		enabledFeatures.shaderInt64 = VK_TRUE;	// Buffer device address requires the 64-bit integer feature to be enabled
 		enabledFeatures.samplerAnisotropy = VK_TRUE;
+		enabledFeatures.textureCompressionBC = deviceFeatures.textureCompressionBC;
+		enabledFeatures.textureCompressionETC2 = deviceFeatures.textureCompressionETC2;
 	}
 
 	void loadAssets()
